@@ -14,6 +14,9 @@
 }
 
 html, body { height: 100%; }
+/* Installed app on iOS 26 blurs and dims content under the status bar ("scroll edge effect"), smearing the
+   location title upward. Leave a strip of plain background so the blur has nothing to pick up. */
+@media (display-mode: standalone) { :root { --fw-top-gap: 22px; } }
 body {
   margin: 0; background: var(--fw-bg); color: var(--fw-ink);
   overflow: hidden; overscroll-behavior: none; touch-action: manipulation;
@@ -25,7 +28,7 @@ body {
   --f-mono: var(--fw-font-mono), "IBM Plex Mono", ui-monospace, Menlo, monospace;
   height: 100%; max-width: 1280px; margin: 0 auto; display: grid; grid-template-rows: auto 1fr auto;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-top: env(safe-area-inset-top, 0px);
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--fw-top-gap, 0px));
   font-family: var(--f-body); font-size: 15px; line-height: 1.45; color: var(--fw-ink); -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
