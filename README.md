@@ -8,11 +8,7 @@ home screen as an app with push alerts. Saved places and settings stay in your b
 accounts and no tracking.
 
 <p align="center">
-  <img src="docs/screenshots/now.png" width="19%" alt="Now page: current conditions, hourly strip, wind, humidity, pressure, UV">
-  <img src="docs/screenshots/hourly.png" width="19%" alt="Hourly page: 24-hour temperature and rain chart with hourly list">
-  <img src="docs/screenshots/ten-day.png" width="19%" alt="10-Day page: day and night cards with NWS forecast text">
-  <img src="docs/screenshots/radar.png" width="19%" alt="Radar page: reflectivity loop over Kansas City on a dark map">
-  <img src="docs/screenshots/themes.png" width="19%" alt="Theme picker: eleven Kansas City color palettes">
+  <img src="docs/screenshots/fairweather-screens.png" alt="Fairweather on iPhone: Now, Hourly, 10-Day, Radar, and the theme picker">
 </p>
 
 ## Features
