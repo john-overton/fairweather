@@ -152,11 +152,13 @@ body {
 
 /* TEN DAY */
 .page.ten-page { overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
-.ten-head { display: flex; align-items: center; gap: 10px; }
-.ten-head .label { flex: 1; }
-.arrow { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--fw-line); background: var(--fw-surface); display: grid; place-items: center; }
+.ten-wrap { flex: 1; min-height: 0; display: flex; position: relative; }
+/* Prev/next float over the card strip; phones swipe instead (the next card peeks) */
+.arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; }
+.arrow.prev { left: 6px; }
+.arrow.next { right: 6px; }
 @media (max-width: 699px) { .arrow { display: none; } }
-.ten { flex: 1; min-height: 0; display: flex; gap: 12px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; padding-bottom: 6px; scrollbar-width: thin; scroll-behavior: smooth; }
+.ten { flex: 1; min-height: 0; min-width: 0; display: flex; gap: 12px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; padding-bottom: 6px; scrollbar-width: thin; scroll-behavior: smooth; }
 .day { scroll-snap-align: start; flex: 0 0 calc(100% - 40px); max-width: 340px; background: var(--fw-surface); border: 1px solid var(--fw-line); border-radius: 18px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
 .day-h { padding: 14px 16px 10px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .day-h .dname { font-size: 28px; line-height: 1; }

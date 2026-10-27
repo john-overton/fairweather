@@ -66,7 +66,6 @@ export default function TenDayPage({ data, now }: { data: ForecastResponse; now:
   const temps = days.flatMap((d) => [d.day?.temp, d.night?.temp]).filter((t): t is number => t != null);
   const lo = Math.min(...temps), hi = Math.max(...temps);
   const today = localDate(now, meta.tz);
-  const nws = days.filter((d) => d.source === 'NWS').length;
 
   const by = (dir: 1 | -1) => {
     const el = row.current;
@@ -75,17 +74,12 @@ export default function TenDayPage({ data, now }: { data: ForecastResponse; now:
   };
 
   return (
-    <>
-      <div className="ten-head">
-        <span className="label">
-          {days.length}-day outlook · {nws ? `days 1 to ${nws} NWS${nws < days.length ? `, ${nws + 1} to ${days.length} model` : ''}` : 'model guidance'}
-        </span>
-        <button className="arrow" aria-label="Earlier days" onClick={() => by(-1)}><ChevronLeft /></button>
-        <button className="arrow" aria-label="Later days" onClick={() => by(1)}><ChevronRight /></button>
-      </div>
+    <div className="ten-wrap">
       <div className="ten" ref={row}>
         {days.map((d) => <DayCard key={d.date} d={d} today={today} lo={lo} hi={hi} />)}
       </div>
-    </>
+      <button className="arrow prev glass" aria-label="Earlier days" onClick={() => by(-1)}><ChevronLeft /></button>
+      <button className="arrow next glass" aria-label="Later days" onClick={() => by(1)}><ChevronRight /></button>
+    </div>
   );
 }
