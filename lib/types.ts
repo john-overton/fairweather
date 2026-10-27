@@ -25,7 +25,11 @@ export interface NowData {
   pressureTrend: 'up' | 'down' | 'steady' | null;
   /** Hourly sea-level pressure (inHg), oldest first, ending now */
   pressure24: number[];
+  /** Hourly relative humidity (%), oldest first, ending now */
+  humidity24: number[];
   visibility: number | null;
+  /** Hourly visibility (mi, capped at 10), oldest first, ending now */
+  visibility24: number[];
   cloudCover: number | null;
   condition: string;
   icon: Cond;
@@ -33,6 +37,9 @@ export interface NowData {
   uv: number | null;
   uvPeak: number | null;
   uvPeakTime: string | null;
+  /** Hourly UV index for today's daylight (plus an hour either side), starting at `uvDayStart` */
+  uvDay: number[];
+  uvDayStart: string | null;
   aqi: number | null;
   aqiPollutant: string | null;
   /** Total precipitation (in) over the past 24 h */

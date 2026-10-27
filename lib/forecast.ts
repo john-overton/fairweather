@@ -122,20 +122,23 @@ function buildNow(
   const press = fromC((o) => o.seaLevelPressure?.value ?? o.barometricPressure?.value, paToInHg);
   const vis = fromC((o) => o.visibility?.value, mToMi);
   const visUnit = om.hourly_units?.visibility;
-  const omVis = c.visibility != null ? (visUnit === 'ft' ? c.visibility / 5280 : c.visibility / 1609.344) : null;
+  const toMi = (v: number) => Math.min(10, Math.round((visUnit === 'ft' ? v / 5280 : v / 1609.344) * 10) / 10);
+  const omVis = c.visibility != null ? toMi(c.visibility) : null;
   const primary = picked?.primary.obs;
 
   const hIdx = new Map(om.hourly.time.map((t, i) => [t * 1000, i]));
   const hour0 = Math.floor(now / HOUR) * HOUR;
   const i0 = hIdx.get(hour0) ?? om.hourly.time.findIndex((t) => t * 1000 >= hour0);
 
-  const pressure24: number[] = [];
+  const pressure24: number[] = [], humidity24: number[] = [], visibility24: number[] = [];
   const rainHourly: number[] = [];
   for (let k = 23; k >= 0; k--) {
     const i = i0 - k;
     if (i < 0) continue;
-    const p = om.hourly.pressure_msl?.[i];
+    const p = om.hourly.pressure_msl?.[i], rh = om.hourly.relative_humidity_2m?.[i], v = om.hourly.visibility?.[i];
     if (p != null) pressure24.push(r2(hPaToInHg(p)));
+    if (rh != null) humidity24.push(r0(rh));
+    if (v != null) visibility24.push(toMi(v));
     rainHourly.push(om.hourly.precipitation?.[i] ?? 0);
   }
   let trend: NowData['pressureTrend'] = null;
@@ -144,14 +147,22 @@ function buildNow(
     trend = d > 0.02 ? 'up' : d < -0.02 ? 'down' : 'steady';
   }
 
-  // UV peak for today
+  // UV peak for today, and the daylight curve (first to last hour with UV, an hour either side, always including now)
   const today = localParts(now, tz).date;
   let uvPeak: number | null = null, uvPeakTime: string | null = null;
+  let uvFirst = -1, uvLast = -1;
   om.hourly.time.forEach((t, i) => {
     if (localParts(t * 1000, tz).date !== today) return;
     const u = om.hourly.uv_index?.[i];
     if (u != null && (uvPeak == null || u > uvPeak)) { uvPeak = u; uvPeakTime = new Date(t * 1000).toISOString(); }
+    if (u != null && u >= 0.05) { if (uvFirst < 0) uvFirst = i; uvLast = i; }
   });
+  let uvDay: number[] = [], uvDayStart: string | null = null;
+  if (uvFirst >= 0 && i0 >= 0) {
+    const a = Math.max(0, Math.min(uvFirst - 1, i0)), b = Math.min(om.hourly.time.length - 1, Math.max(uvLast + 1, i0 + 1));
+    uvDay = om.hourly.time.slice(a, b + 1).map((_, k) => Math.round((om.hourly.uv_index?.[a + k] ?? 0) * 10) / 10);
+    uvDayStart = new Date(om.hourly.time[a] * 1000).toISOString();
+  }
 
   const dIdx = om.daily.time.findIndex((t) => dailyDate(t, tz) === today);
   const sr = dIdx >= 0 ? om.daily.sunrise?.[dIdx] : null;
@@ -175,7 +186,9 @@ function buildNow(
     pressure: press != null ? r2(press) : c.pressure_msl != null ? r2(hPaToInHg(c.pressure_msl)) : null,
     pressureTrend: trend,
     pressure24,
+    humidity24,
     visibility: (() => { const v = vis ?? omVis; return v == null ? null : Math.min(10, Math.round(v * 10) / 10); })(),
+    visibility24,
     cloudCover: gridSky ?? c.cloud_cover ?? null,
     condition: (has && primary?.textDescription) || wmo.text,
     icon: nwsIcon?.cond ?? wmo.cond,
@@ -183,6 +196,8 @@ function buildNow(
     uv: c.uv_index != null ? Math.round(c.uv_index) : null,
     uvPeak: uvPeak == null ? null : Math.round(uvPeak),
     uvPeakTime,
+    uvDay,
+    uvDayStart,
     aqi: aq?.aqi ?? null,
     aqiPollutant: aq?.pollutant ?? null,
     rain24: r2(rainHourly.reduce((a, b) => a + b, 0)),

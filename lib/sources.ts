@@ -281,7 +281,7 @@ export function omBest(lat: number, lon: number): Promise<OmBest> {
     '&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,wind_speed_10m,wind_gusts_10m,' +
     'wind_direction_10m,pressure_msl,cloud_cover,visibility,weather_code,is_day,uv_index' +
     '&hourly=temperature_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,' +
-    'cloud_cover,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,is_day' +
+    'cloud_cover,pressure_msl,relative_humidity_2m,visibility,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,is_day' +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,' +
     'wind_gusts_10m_max,wind_direction_10m_dominant,sunrise,sunset,uv_index_max' +
     '&minutely_15=precipitation&past_minutely_15=4&forecast_minutely_15=8';

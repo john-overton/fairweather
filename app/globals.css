@@ -101,14 +101,12 @@ body {
 .val { font-size: 38px; line-height: 1; }
 .val small { font-family: var(--f-body); font-variation-settings: normal; font-size: 14px; font-weight: 600; color: var(--fw-muted); margin-left: 3px; }
 .note { font-size: 13px; color: var(--fw-muted); }
-.tile svg.fill { width: 100%; height: auto; flex: 1; min-height: 0; }
-.compass-wrap { display: flex; align-items: center; gap: 12px; }
-.compass { width: 76px; height: 76px; flex: none; }
+/* Charts fill whatever height the tile has left; Plot measures it and draws in pixels */
+.plot { position: relative; flex: 1 1 auto; min-height: 48px; margin-top: 4px; }
+.plot > svg { position: absolute; inset: 0; overflow: visible; }
+.plot.compass { min-height: 92px; }
 .uvbar { height: 8px; border-radius: 99px; background: linear-gradient(90deg, #3ea55a, #e4cc3a 25%, #f08a24 55%, #d93a2b 75%, #8d3fbf); position: relative; margin-top: 8px; }
 .uvbar i { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: var(--fw-surface); border: 3px solid var(--fw-ink); transform: translate(-50%, -50%); }
-.bars { display: flex; align-items: flex-end; gap: 2px; height: 44px; margin-top: auto; }
-.bars i { flex: 1; background: var(--fw-cool); border-radius: 2px 2px 0 0; min-height: 2px; opacity: .85; }
-.bars i.zero { background: var(--fw-line); opacity: 1; }
 .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--fw-muted); font-family: var(--f-mono); }
 
 @media (min-width: 900px) {
