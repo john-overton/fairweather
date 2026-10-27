@@ -183,7 +183,8 @@ body {
 /* RADAR */
 .page.radar { overflow: hidden; padding: 0; margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px))); }
 @media (min-width: 1312px) { .page.radar { margin: 0; border-radius: 16px; } }
-.radar-map { position: absolute; inset: 0; }
+/* Two classes so this beats mapbox-gl.css's `.mapboxgl-map { position: relative }`, which loads later */
+.page.radar .radar-map { position: absolute; inset: 0; }
 .radar .mapboxgl-ctrl-bottom-left, .radar .mapboxgl-ctrl-bottom-right { bottom: calc(var(--tl-h, 0px) + 18px); }
 .ov { position: absolute; z-index: 2; }
 .glass { background: var(--fw-glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--fw-line); box-shadow: var(--fw-shadow); }
