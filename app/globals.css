@@ -142,10 +142,9 @@ body {
 @media (max-width: 420px) { .hrow { grid-template-columns: 52px 28px minmax(0, 1fr) 42px 44px; } .hrow .w { display: none; } }
 @media (min-width: 900px) {
   .page.fit-lg { overflow: hidden; }
-  .hourly { height: 100%; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); grid-template-rows: auto 1fr; }
-  .hourly .summary { grid-column: 1 / -1; }
+  /* Chart across the top, the hour list in a scrolling panel filling the rest */
+  .hourly { height: 100%; grid-template-rows: auto auto minmax(0, 1fr); }
   .hlist { overflow-y: auto; min-height: 0; }
-  .chart-card { align-self: start; }
 }
 
 /* TEN DAY */

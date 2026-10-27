@@ -30,7 +30,8 @@ function HourlyChart({ hours, tz, sunrise, sunset }: { hours: HourData[]; tz: st
   const x = (i: number) => pl + (i * (w - pl - pr)) / (n - 1);
   const y = (v: number) => top + ((mx - v) / (mx - mn)) * (cb - top);
   const d = T.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
-  const step = w < 520 ? 4 : 3;
+  // Label every 4th, 3rd, or (full-width desktop chart) 2nd hour
+  const step = w < 520 ? 4 : w < 900 ? 3 : 2;
   const t0 = Date.parse(hours[0].time);
 
   // Sun markers inside the window (tomorrow's times approximated as today's + 24 h)
