@@ -6,8 +6,8 @@ import { cached } from '@/lib/sources';
 export const dynamic = 'force-dynamic';
 
 const STATES: Record<string, string> = {
-  Alabama: 'AL', Arizona: 'AZ', Arkansas: 'AR', California: 'CA', Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE',
-  'District of Columbia': 'DC', Florida: 'FL', Georgia: 'GA', Idaho: 'ID', Illinois: 'IL', Indiana: 'IN', Iowa: 'IA',
+  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA', Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE',
+  'District of Columbia': 'DC', Florida: 'FL', Georgia: 'GA', Hawaii: 'HI', Idaho: 'ID', Illinois: 'IL', Indiana: 'IN', Iowa: 'IA',
   Kansas: 'KS', Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME', Maryland: 'MD', Massachusetts: 'MA', Michigan: 'MI',
   Minnesota: 'MN', Mississippi: 'MS', Missouri: 'MO', Montana: 'MT', Nebraska: 'NE', Nevada: 'NV', 'New Hampshire': 'NH',
   'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH',
@@ -18,7 +18,7 @@ const STATES: Record<string, string> = {
 
 interface GeoJson { results?: { name: string; admin1?: string; country_code: string; latitude: number; longitude: number; population?: number }[] }
 
-/** Place search via Open-Meteo geocoding, limited to the contiguous US. */
+/** Place search via Open-Meteo geocoding, limited to US states and DC. */
 export async function GET(req: Request) {
   const q = new URL(req.url).searchParams.get('q')?.trim() ?? '';
   if (q.length < 2 || q.length > 80) return NextResponse.json({ results: [] });

@@ -201,7 +201,7 @@ export default function FairweatherApp() {
   const tz = data?.meta.tz ?? 'America/Chicago';
   const updatedMs = data ? Date.parse(data.meta.updated) : 0;
   const stale = data ? now - updatedMs > STALE_MS : false;
-  const office = data?.meta.officeName ? `NWS ${data.meta.officeName}` : data ? 'Model data' : '';
+  const office = data?.meta.officeName ? `NWS ${data.meta.officeName}` : data?.meta.office ? `NWS ${data.meta.office}` : data ? 'Model data' : '';
   let sub = 'Loading forecast...';
   if (data) sub = `${stale ? 'Last updated' : 'Updated'} ${fmtTime(updatedMs, tz)} · ${office}`;
   else if (fetchError) sub = fetchError === 'offline' ? 'Offline · no saved forecast yet' : "Couldn't load the forecast";

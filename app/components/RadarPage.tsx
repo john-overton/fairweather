@@ -5,6 +5,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { HRRR_BOUNDS, type LngLatBox, type RadarLayer as LayerId, type Win, buildFrames, frameTileLayer } from '@/lib/radarFrames';
 import type { RadarManifest, RadarSite, SavedLocation } from '@/lib/types';
 
 import { api } from '../lib/base';
@@ -17,7 +18,6 @@ import { PauseIcon, PlayIcon, ReplayIcon, TargetIcon } from './Icons';
 /* ------------------------------------------------------------------ */
 
 const MIN = 60_000;
-const IEM_HOSTS = ['mesonet1', 'mesonet2', 'mesonet3'];
 /** Night basemap = dark-mode style, Day basemap = light-mode style (.env.local) */
 const STYLES = {
   night: process.env.NEXT_PUBLIC_MAPBOX_STYLE_DARK || 'mapbox://styles/mapbox/dark-v11',
@@ -29,48 +29,24 @@ const BASEMAP_UI = {
 };
 type Basemap = keyof typeof STYLES;
 
-type LayerId = 'ref' | 'ptype';
 const LAYERS: { id: LayerId; name: string }[] = [
   { id: 'ref', name: 'Reflectivity' },
   { id: 'ptype', name: 'Precip type' },
 ];
 
-type Win = 2 | 6 | 24;
-/** Observed frame step per window. 24 h uses 30-min steps to keep phone GPU memory in check. */
-const OBS_STEP_MIN: Record<Win, number> = { 2: 10, 6: 10, 24: 30 };
-const FCST_STEP_MIN = 30;
+/** Frames are added to the map a few at a time, Now first, so the first image shows quickly on phones */
+const LOAD_BATCH = 3;
 const SPEED_MS: Record<Win, number> = { 2: 160, 6: 110, 24: 70 };
 const RADAR_OPACITY = 0.8;
 const RING_KM = 230;
 
+/** Pan limit and "US" view: the lower 48, Alaska, Hawaii, and Puerto Rico */
+const US_MAX_BOUNDS: [[number, number], [number, number]] = [[-179.9, 5], [-50, 74]];
+const US_VIEW: [[number, number], [number, number]] = [[-170.5, 15.4], [-64.5, 68.7]];
+
 const REF_RAMP = ['#04e9e7', '#019ff4', '#0300f4', '#02fd02', '#01c501', '#008e00', '#fdf802', '#e5bc00', '#fd9500', '#fd0000', '#d40000', '#bc0000', '#f800fd', '#9854c6'];
 
-interface Frame { id: string; time: number; future: boolean; minute?: number }
-
-const stamp = (ms: number) => new Date(ms).toISOString().replace(/[-:T]/g, '').slice(0, 12);
-
-function tileLayer(frame: Frame, layer: LayerId, run: string | null): string {
-  if (!frame.future) return `ridge::USCOMP-N0Q-${stamp(frame.time)}`;
-  const f = String(frame.minute).padStart(4, '0');
-  return `hrrr::${layer === 'ptype' ? 'REFP' : 'REFD'}-F${f}-${stamp(Date.parse(run!))}`;
-}
-
-function buildFrames(m: RadarManifest | null, win: Win, future: boolean, now: number): { frames: Frame[]; nowIdx: number } {
-  const step = OBS_STEP_MIN[win] * MIN;
-  // Without a manifest, assume the archive is ~10 min behind and use 5-minute mosaics
-  const latest = m ? Date.parse(m.latestObs) : Math.floor((now - 10 * MIN) / (5 * MIN)) * 5 * MIN;
-  const aligned = Math.floor(latest / step) * step;
-  const frames: Frame[] = [];
-  for (let t = aligned - win * 60 * MIN; t <= aligned; t += step) frames.push({ id: `o${t}`, time: t, future: false });
-  if (latest > aligned) frames.push({ id: `o${latest}`, time: latest, future: false });
-  const nowIdx = frames.length - 1;
-  if (future && m?.run) {
-    for (const f of m.forecast) {
-      if (f.minute % FCST_STEP_MIN === 0) frames.push({ id: `f${f.minute}`, time: Date.parse(f.valid), future: true, minute: f.minute });
-    }
-  }
-  return { frames, nowIdx };
-}
+const intersects = (a: LngLatBox, b: LngLatBox) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
 function ringPolygon(lat: number, lon: number, km: number): GeoJSON.Feature<GeoJSON.LineString> {
   const coords: [number, number][] = [];
@@ -108,6 +84,9 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
   const pageRef = useRef<HTMLElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const [styleVersion, setStyleVersion] = useState(0);
+  // True between `style.load` and the next setStyle(). Not map.isStyleLoaded(): in Mapbox v3 that also
+  // waits for every basemap tile, so effects that checked it bailed and never re-ran.
+  const styleReady = useRef(false);
 
   const [manifest, setManifest] = useState<RadarManifest | null>(null);
   const [manifestError, setManifestError] = useState(false);
@@ -119,6 +98,7 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
   const [playing, setPlaying] = useState(false);
   const [loaded, setLoaded] = useState(0);
   const [clock, setClock] = useState(() => Date.now());
+  const [view, setView] = useState<LngLatBox | null>(null);
 
   /* ---- Manifest: fetch on open and every 2 min while visible ---- */
   useEffect(() => {
@@ -155,8 +135,13 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
     if (active) requestAnimationFrame(() => mapRef.current?.resize());
   }, [active, nowIdx]);
 
-  // Keep the selection valid when the frame list changes
-  useEffect(() => { setIdx((i) => (i >= frames.length ? nowIdx : i)); }, [frames.length, nowIdx]);
+  // When a newer observed frame arrives, stay on Now if that's where we were; otherwise keep the selection valid
+  const prevNowIdx = useRef(nowIdx);
+  useEffect(() => {
+    const prev = prevNowIdx.current;
+    prevNowIdx.current = nowIdx;
+    setIdx((i) => (i === prev ? nowIdx : Math.min(i, frames.length - 1)));
+  }, [frames.length, nowIdx]);
 
   /* ---- Map init ---- */
   useEffect(() => {
@@ -167,8 +152,10 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
       style: STYLES[basemap],
       center: [location.lon, location.lat],
       zoom: 6.6,
-      minZoom: 5,
+      minZoom: 1.5,
       maxZoom: 12,
+      maxBounds: US_MAX_BOUNDS,
+      projection: 'mercator',
       dragRotate: false,
       pitchWithRotate: false,
       touchPitch: false,
@@ -178,7 +165,13 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
     map.touchZoomRotate.disableRotation();
     map.keyboard.disableRotation();
     map.addControl(new mapboxgl.AttributionControl({ compact: true, customAttribution: 'Radar: NOAA via Iowa Environmental Mesonet' }), 'bottom-right');
-    map.on('style.load', () => setStyleVersion((v) => v + 1));
+    map.on('style.load', () => { styleReady.current = true; setStyleVersion((v) => v + 1); });
+    const track = () => {
+      const b = map.getBounds();
+      if (b) setView([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+    };
+    map.on('moveend', track);
+    map.on('load', track);
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,68 +182,83 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
   useEffect(() => {
     store.set('wx.basemap', basemap);
     if (firstBasemap.current) { firstBasemap.current = false; return; }
+    styleReady.current = false;
     mapRef.current?.setStyle(STYLES[basemap]);
   }, [basemap]);
 
-  /* ---- Recenter and bound the map to the selected location's region ---- */
+  /* ---- Recenter on the selected location, or show the whole US ---- */
   const recenter = useCallback(() => {
     mapRef.current?.easeTo({ center: [location.lon, location.lat], zoom: 6.6, duration: 600 });
   }, [location.lat, location.lon]);
+  const showUS = () => mapRef.current?.fitBounds(US_VIEW, { padding: { top: 70, bottom: 230, left: 20, right: 70 }, duration: 600 });
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    map.setMaxBounds([[location.lon - 7, location.lat - 5], [location.lon + 7, location.lat + 5]]);
-    map.jumpTo({ center: [location.lon, location.lat] });
-  }, [location.lat, location.lon, styleVersion]);
+    mapRef.current?.jumpTo({ center: [location.lon, location.lat], zoom: Math.max(mapRef.current.getZoom(), 5) });
+  }, [location.lat, location.lon]);
 
-  /* ---- Radar frame sources: one raster source per frame, preloaded from Now outward ---- */
-  const frameIds = useMemo(() => frames.map((f) => `fwr-${layer}-${tileLayer(f, layer, run)}`), [frames, layer, run]);
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !styleVersion || !map.isStyleLoaded()) return;
-    const wanted = new Set(frameIds);
-    for (const l of map.getStyle().layers ?? []) {
-      if (l.id.startsWith('fwr-') && !wanted.has(l.id)) {
-        map.removeLayer(l.id);
-        if (map.getSource(l.id)) map.removeSource(l.id);
-      }
-    }
-    const before = firstRoadLayer(map);
-    // Order: Now, then alternate older and newer frames
+  /* ---- Radar frame sources: one raster source per region per frame, preloaded from Now outward ---- */
+  const frameLayers = useMemo(
+    () => frames.map((f) => { const t = frameTileLayer(f, layer, run); return [{ ...t, id: `fwr-${layer}-${t.name}` }]; }),
+    [frames, layer, run],
+  );
+  // Progressive loading: how many frames (in Now-outward order) are on the map so far
+  const [budget, setBudget] = useState(1);
+  const loadOrder = useMemo(() => {
     const order: number[] = [nowIdx];
     for (let k = 1; order.length < frames.length; k++) {
       if (nowIdx - k >= 0) order.push(nowIdx - k);
       if (nowIdx + k < frames.length) order.push(nowIdx + k);
     }
-    for (const i of order) {
-      const id = frameIds[i];
-      if (map.getLayer(id)) continue;
-      const name = tileLayer(frames[i], layer, run);
-      map.addSource(id, {
-        type: 'raster',
-        tiles: IEM_HOSTS.map((h) => `https://${h}.agron.iastate.edu/cache/tile.py/1.0.0/${name}/{z}/{x}/{y}.png`),
-        tileSize: 256,
-        maxzoom: 8,
-      });
-      map.addLayer({
-        id, type: 'raster', source: id,
-        paint: { 'raster-opacity': 0, 'raster-fade-duration': 0, 'raster-opacity-transition': { duration: 0, delay: 0 } },
-      }, before);
-    }
-    setLoaded(0);
-  }, [frameIds, frames, nowIdx, layer, run, styleVersion]);
-
-  /* ---- Show the current frame by toggling opacity ---- */
-  const shownRef = useRef<string | null>(null);
+    return order;
+  }, [nowIdx, frames.length]);
+  useEffect(() => { setBudget(1); }, [frameLayers, styleVersion]);
+  // Jumping to a frame that isn't loaded yet pulls it to the front of the queue
+  const wanted = useMemo(() => {
+    const set = new Set(loadOrder.slice(0, budget));
+    set.add(Math.min(idx, frames.length - 1));
+    return [...set];
+  }, [loadOrder, budget, idx, frames.length]);
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !styleVersion) return;
-    const id = frameIds[Math.min(idx, frameIds.length - 1)];
-    const prev = shownRef.current;
-    if (prev && prev !== id && map.getLayer(prev)) map.setPaintProperty(prev, 'raster-opacity', 0);
-    if (id && map.getLayer(id)) map.setPaintProperty(id, 'raster-opacity', RADAR_OPACITY);
-    shownRef.current = id;
-  }, [idx, frameIds, styleVersion]);
+    if (!map || !styleReady.current) return;
+    const keep = new Set(frameLayers.flat().map((l) => l.id));
+    for (const l of map.getStyle().layers ?? []) {
+      if (l.id.startsWith('fwr-') && !keep.has(l.id)) {
+        map.removeLayer(l.id);
+        if (map.getSource(l.id)) map.removeSource(l.id);
+      }
+    }
+    const before = firstRoadLayer(map);
+    for (const i of wanted) {
+      for (const { id, name, bounds, maxzoom } of frameLayers[i] ?? []) {
+        if (map.getLayer(id)) continue;
+        map.addSource(id, {
+          type: 'raster',
+          // Server tile cache in front of IEM (lib/radar.ts); frames are timestamped and immutable
+          tiles: [`${window.location.origin}${api(`radar/tile/${name}/{z}/{x}/{y}.png`)}`],
+          tileSize: 256,
+          maxzoom,
+          ...(bounds ? { bounds } : {}),
+        });
+        map.addLayer({
+          id, type: 'raster', source: id,
+          paint: { 'raster-opacity': 0, 'raster-fade-duration': 0, 'raster-opacity-transition': { duration: 0, delay: 0 } },
+        }, before);
+      }
+    }
+  }, [frameLayers, wanted, styleVersion]);
+
+  /* ---- Show the current frame by toggling opacity ---- */
+  const shownRef = useRef<string[]>([]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady.current) return;
+    const ids = (frameLayers[Math.min(idx, frameLayers.length - 1)] ?? []).map((l) => l.id);
+    for (const prev of shownRef.current) {
+      if (!ids.includes(prev) && map.getLayer(prev)) map.setPaintProperty(prev, 'raster-opacity', 0);
+    }
+    for (const id of ids) if (map.getLayer(id)) map.setPaintProperty(id, 'raster-opacity', RADAR_OPACITY);
+    shownRef.current = ids;
+  }, [idx, frameLayers, styleVersion]);
 
   /* ---- Preload progress ---- */
   useEffect(() => {
@@ -261,19 +269,21 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         let n = 0;
-        for (const id of frameIds) if (map.getSource(id) && map.isSourceLoaded(id)) n++;
+        for (const f of frameLayers) if (f.every(({ id }) => map.getSource(id) && map.isSourceLoaded(id))) n++;
         setLoaded(n);
+        // Everything added so far is in: queue the next few frames
+        setBudget((b) => (n >= Math.min(b, frameLayers.length) && b < frameLayers.length ? b + LOAD_BATCH : b));
       });
     };
     map.on('sourcedata', count);
     map.on('idle', count);
     return () => { map.off('sourcedata', count); map.off('idle', count); cancelAnimationFrame(raf); };
-  }, [frameIds, styleVersion]);
+  }, [frameLayers, styleVersion]);
 
   /* ---- Overlays: saved-location pins, radar site, range ring ---- */
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !styleVersion || !map.isStyleLoaded()) return;
+    if (!map || !styleReady.current) return;
     const ui = BASEMAP_UI[basemap];
     const locData: GeoJSON.FeatureCollection<GeoJSON.Point> = {
       type: 'FeatureCollection',
@@ -409,10 +419,13 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
         <button aria-label="Zoom in" onClick={() => mapRef.current?.zoomIn()}>+</button>
         <button aria-label="Zoom out" onClick={() => mapRef.current?.zoomOut()}>−</button>
         <button aria-label="Recenter on location" onClick={recenter}><TargetIcon /></button>
+        <button className="us-btn" aria-label="Show all of the US, including Alaska and Hawaii" onClick={showUS}>US</button>
       </div>
 
       {isFuture ? (
-        <div className="ov fc-badge"><ReplayIcon />Model forecast · not observed radar</div>
+        <div className="ov fc-badge">
+          <ReplayIcon />Model forecast · {view && !intersects(view, HRRR_BOUNDS) ? 'lower 48 only' : 'not observed radar'}
+        </div>
       ) : note && (
         <div className={`ov radar-note glass${note.warn ? ' warn' : ''}`} role="status">{note.text}</div>
       )}

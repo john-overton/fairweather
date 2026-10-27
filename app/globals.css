@@ -41,7 +41,6 @@ body {
 /* Header */
 .fw .top { display: flex; align-items: center; gap: 10px; padding-block: 10px 8px; min-width: 0; }
 .loc-btn { display: flex; flex-direction: column; align-items: flex-start; text-align: left; min-width: 0; padding: 4px 6px; margin-left: -6px; border-radius: 10px; min-height: 44px; }
-.loc-btn:hover { background: var(--fw-surface-2); }
 .loc-name { font-size: 24px; line-height: 1; letter-spacing: .01em; display: flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 100%; }
 .loc-name > span { overflow: hidden; text-overflow: ellipsis; }
 .loc-name svg { flex: none; }
@@ -50,7 +49,6 @@ body {
 .chip { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; border: 1px solid var(--fw-line); color: var(--fw-muted); padding: 3px 7px; border-radius: 999px; white-space: nowrap; }
 .chip.warn { color: var(--fw-warn); border-color: var(--fw-warn-line); background: var(--fw-warn-bg); }
 .icon-btn { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: var(--fw-ink); border: 1px solid var(--fw-line); background: var(--fw-surface); flex: none; }
-.icon-btn:hover { background: var(--fw-surface-2); }
 @media (max-width: 420px) { .hide-sm { display: none; } }
 
 .fw main { position: relative; min-height: 0; }
@@ -199,6 +197,7 @@ body {
 .zoom { right: max(12px, env(safe-area-inset-right, 0px)); top: 132px; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; }
 .zoom button { width: 46px; height: 44px; display: grid; place-items: center; font-size: 22px; font-weight: 500; }
 .zoom button + button { border-top: 1px solid var(--fw-line); }
+.zoom .us-btn { font-size: 12px; font-weight: 800; letter-spacing: .04em; }
 .timeline { left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: 12px; border-radius: 18px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; max-width: 640px; margin: 0 auto; }
 .tl-row { display: flex; align-items: center; gap: 10px; }
 .play { width: 44px; height: 44px; border-radius: 50%; background: var(--fw-accent); color: var(--fw-on-accent); display: grid; place-items: center; flex: none; }
@@ -257,7 +256,6 @@ body {
 .locrow .pick b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .locrow .pick span { font-size: 12px; color: var(--fw-muted); font-family: var(--f-mono); }
 .locrow .rm { width: 44px; height: 44px; border-radius: 8px; color: var(--fw-muted); flex: none; }
-.locrow .rm:hover { background: var(--fw-surface-2); color: var(--fw-ink); }
 .menurow { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--fw-line); border-radius: 12px; text-align: left; width: 100%; min-height: 48px; }
 .menurow .grow { flex: 1; }
 .menurow small { display: block; color: var(--fw-muted); font-size: 12px; }
@@ -271,7 +269,6 @@ body {
 .results { display: flex; flex-direction: column; border: 1px solid var(--fw-line); border-radius: 12px; overflow: hidden; }
 .results button { text-align: left; padding: 10px 12px; min-height: 44px; display: flex; justify-content: space-between; gap: 8px; }
 .results button + button { border-top: 1px solid var(--fw-line); }
-.results button:hover { background: var(--fw-surface-2); }
 .results span { color: var(--fw-muted); font-family: var(--f-mono); font-size: 12px; }
 .fine { font-size: 12px; color: var(--fw-muted); }
 .err-text { font-size: 13px; color: var(--fw-bad); }
@@ -298,6 +295,14 @@ body {
 .credits a, .sheet a { color: var(--fw-accent); }
 .skeleton { background: linear-gradient(90deg, var(--fw-surface) 0%, var(--fw-surface-2) 50%, var(--fw-surface) 100%); background-size: 200% 100%; animation: fw-shimmer 1.4s infinite; border-radius: 16px; border: 1px solid var(--fw-line); }
 @keyframes fw-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+/* Hover only where a pointer can actually hover: iOS keeps :hover stuck on after a tap */
+@media (hover: hover) {
+  .loc-btn:hover { background: var(--fw-surface-2); }
+  .icon-btn:hover { background: var(--fw-surface-2); }
+  .locrow .rm:hover { background: var(--fw-surface-2); color: var(--fw-ink); }
+  .results button:hover { background: var(--fw-surface-2); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fw *, .fw-layer * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }

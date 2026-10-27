@@ -378,7 +378,8 @@ export async function buildForecast(lat: number, lon: number): Promise<ForecastR
   const om = omR.v;
   const pt: NwsPoint | null = valOf(ptR);
   const models = valOf(mR);
-  const tz = pt?.tz ?? om.timezone;
+  // Open-Meteo's zone comes from the coordinates; NWS reports America/New_York for Puerto Rico
+  const tz = om.timezone || pt?.tz || 'America/Chicago';
   const errors: string[] = [];
 
   const [fcR, hrR, gridR, obsR] = pt

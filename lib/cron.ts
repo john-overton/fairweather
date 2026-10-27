@@ -5,10 +5,12 @@
  *   alerts   every 2 min   NWS alerts for every saved zone → push
  *   rain     every 15 min  "Rain soon" + morning brief
  *   cleanup  daily 3:17    prune dead/abandoned subscriptions and old rows
+ *   radar    every 5 min   prewarm the radar tile cache, prune old frames
  */
 import { fwDb, type SubLocationRow, type SubPrefsRow, type SubRow } from './db';
 import { alertLevel, buildForecast } from './forecast';
 import { deliverOnce, fanOut, inQuietHours, localMinutes, toMin, type PushPayload } from './push';
+import { prewarmRadar, pruneRadarTiles } from './radar';
 import { nwsAlertsZones, omMinutely, type NwsAlertProps } from './sources';
 
 const LEVEL_RANK: Record<string, number> = { statement: 0, advisory: 1, watch: 2, warning: 3 };
@@ -205,4 +207,19 @@ export function runCleanup() {
   const counts = { dead, abandoned, alertsPruned, deliveriesPruned };
   console.log('[fairweather] cleanup', counts);
   return counts;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Radar tile cache                                                   */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_POINT = { lat: 39.0997, lon: -94.5786 }; // Kansas City, the app's default location
+
+export async function runRadar() {
+  // Kansas City plus every subscriber's saved places (rounded to ~10 km, capped) so their first look is instant
+  const rows = fwDb().prepare('SELECT DISTINCT ROUND(lat, 1) AS lat, ROUND(lon, 1) AS lon FROM sub_locations LIMIT 20').all() as { lat: number; lon: number }[];
+  const points = [DEFAULT_POINT, ...rows.filter((r) => Math.abs(r.lat - DEFAULT_POINT.lat) > 0.5 || Math.abs(r.lon - DEFAULT_POINT.lon) > 0.5)];
+  const warm = await prewarmRadar(points);
+  const prune = await pruneRadarTiles();
+  return { ...warm, ...prune };
 }

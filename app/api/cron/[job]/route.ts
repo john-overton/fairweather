@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { runAlerts, runCleanup, runRainAndBrief } from '@/lib/cron';
+import { runAlerts, runCleanup, runRadar, runRainAndBrief } from '@/lib/cron';
 import { jsonError } from '@/lib/http';
 
 export const dynamic = 'force-dynamic';
@@ -10,6 +10,7 @@ const JOBS: Record<string, () => unknown> = {
   alerts: runAlerts,
   rain: runRainAndBrief,
   cleanup: runCleanup,
+  radar: runRadar,
 };
 
 /**

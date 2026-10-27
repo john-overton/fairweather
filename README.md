@@ -52,10 +52,16 @@ through `app/lib/base.ts` because Next does not prefix those.
 | Days 8 to 10 | Mean of ECMWF, GFS, ICON (whichever reach that day) with spread | If NWS is down, all 10 days are Model and the UI says so |
 | Alerts | NWS `/alerts/active` | |
 | AQI | EPA AirNow if `AIRNOW_API_KEY`, else CAMS via Open-Meteo | |
-| Radar, observed | IEM NEXRAD N0Q composite archive (5-min mosaics) | Base reflectivity only |
-| Radar, forecast | IEM HRRR tiles (`REFD`, `REFP` for precip type), pinned to the newest complete run | Never mixes runs |
+| Radar, observed | IEM NEXRAD N0Q composite archive (5-min mosaics) | Base reflectivity; one national mosaic covering the lower 48, Alaska, Hawaii, and Puerto Rico |
+| Radar, forecast | IEM HRRR tiles (`REFD`, `REFP` for precip type), pinned to the newest complete run | Lower 48 only; never mixes runs |
 
 Server responses are cached in memory (forecast 10 min, points 24 h, alerts 2 min).
+
+Radar tiles go through `/fairweather/api/radar/tile/...`, which stores each IEM tile on disk
+(`data/tiles`) and serves it immutable. The `radar` cron job pre-fetches the default 2 h loop and
+first 6 h of forecast around Kansas City and subscribers' saved places, and prunes frames older than
+25 h and all but the newest two HRRR runs. The Radar page adds frames to the map a few at a time,
+Now first.
 
 ## Push
 
@@ -69,6 +75,7 @@ is its identity and its `auth` secret is the credential for prefs/unsubscribe/te
   everything except Severe/Extreme warnings; held alerts go out after quiet hours if still active.
 - **rain** (every 15 min): "Rain soon" from Open-Meteo `minutely_15` for the primary (first) location,
   3 h cooldown, plus the morning brief once per local day.
+- **radar** (every 5 min): radar tile cache prewarm and prune (see Data).
 - **cleanup** (daily): 404/410 deletes immediately on send; this sweep removes dead (10+ failures over
   7 days) and abandoned (120 days unseen, no success in 30) subscriptions and prunes old rows.
 
