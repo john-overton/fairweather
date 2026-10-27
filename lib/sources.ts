@@ -150,7 +150,7 @@ interface StationsJson {
   features: { geometry: { coordinates: [number, number] }; properties: { stationIdentifier: string; name: string } }[];
 }
 
-/** Nearest two observation stations, cached 24 h. */
+/** Nearest observation stations within 40 km (up to 4), cached 24 h. */
 export function nwsStations(pt: NwsPoint, lat: number, lon: number) {
   return cached(`stations:${pt.stationsUrl}`, 24 * 3600_000, async () => {
     const j = await nwsGet<StationsJson>(`${pt.stationsUrl}?limit=10`);
@@ -163,20 +163,70 @@ export function nwsStations(pt: NwsPoint, lat: number, lon: number) {
         km: distanceKm(lat, lon, f.geometry.coordinates[1], f.geometry.coordinates[0]),
       }))
       .sort((a, b) => a.km - b.km)
-      .slice(0, 2);
+      .filter((s, i) => i === 0 || s.km <= 40)
+      .slice(0, 4);
   });
 }
 
 export interface NwsObservation {
-  timestamp: string; textDescription: string; icon: string | null;
+  timestamp: string; textDescription: string; icon: string | null; rawMessage?: string;
   temperature: QV; dewpoint: QV; windDirection: QV; windSpeed: QV; windGust: QV;
   barometricPressure: QV; seaLevelPressure: QV; visibility: QV; relativeHumidity: QV;
   windChill: QV; heatIndex: QV;
 }
 
+/**
+ * The NWS API often leaves the parsed fields of an hourly METAR blank (seen at KMKC, and every recent
+ * PHNL report) while `rawMessage` still has them. Fill blanks from the METAR text, in API units:
+ * °C, km/h, degrees, Pa, m, %.
+ */
+export function fillFromMetar(o: NwsObservation): NwsObservation {
+  const raw = o.rawMessage;
+  if (!raw) return o;
+  const out: NwsObservation = { ...o };
+  const set = (k: keyof NwsObservation, v: number | null) => {
+    const cur = out[k] as QV | undefined;
+    if (v != null && Number.isFinite(v) && (cur?.value == null)) (out[k] as QV) = { value: v };
+  };
+  const signed = (sign: string, digits: string) => (sign === '1' ? -1 : 1) * Number(digits) / 10;
+  const tGroup = raw.match(/\bT([01])(\d{3})(?:([01])(\d{3}))?\b/);
+  const body = raw.match(/\s(M?\d{2})\/(M?\d{2})?\s/);
+  const whole = (v?: string) => (v ? (v.startsWith('M') ? -1 : 1) * Number(v.replace('M', '')) : null);
+  const t = tGroup ? signed(tGroup[1], tGroup[2]) : whole(body?.[1]);
+  const td = tGroup?.[3] ? signed(tGroup[3], tGroup[4]) : whole(body?.[2]);
+  set('temperature', t);
+  set('dewpoint', td);
+  if (t != null && td != null) {
+    const rh = 100 * Math.exp((17.625 * td) / (243.04 + td)) / Math.exp((17.625 * t) / (243.04 + t));
+    set('relativeHumidity', Math.min(100, rh));
+  }
+  const wind = raw.match(/\b(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?(KT|MPS)\b/);
+  if (wind) {
+    const k = wind[4] === 'KT' ? 1.852 : 3.6;
+    if (wind[1] !== 'VRB') set('windDirection', Number(wind[1]));
+    set('windSpeed', Number(wind[2]) * k);
+    if (wind[3]) set('windGust', Number(wind[3]) * k);
+  }
+  const vis = raw.match(/\s(?:(\d+)\s)?M?(\d+)(?:\/(\d+))?SM\b/);
+  if (vis) set('visibility', (Number(vis[1] ?? 0) + (vis[3] ? Number(vis[2]) / Number(vis[3]) : Number(vis[2]))) * 1609.344);
+  const alt = raw.match(/\bA(\d{4})\b/);
+  if (alt) set('barometricPressure', (Number(alt[1]) / 100) * 3386.389);
+  const slp = raw.match(/\bSLP(\d{3})\b/);
+  if (slp) { const n = Number(slp[1]) / 10; set('seaLevelPressure', (n < 50 ? 1000 + n : 900 + n) * 100); }
+  return out;
+}
+
+/**
+ * Newest report from a station that has a temperature, with blank fields filled from its METAR.
+ * Not `/observations/latest`, which returned records with no usable temperature.
+ */
 export const nwsLatestObs = (station: string) =>
-  cached(`obs:${station}`, 5 * 60_000, async () =>
-    (await nwsGet<{ properties: NwsObservation }>(`/stations/${station}/observations/latest`)).properties);
+  cached(`obs:${station}`, 5 * 60_000, async () => {
+    const j = await nwsGet<{ features: { properties: NwsObservation }[] }>(`/stations/${station}/observations?limit=4`);
+    const withTemp = j.features.map((f) => fillFromMetar(f.properties)).filter((p) => p.temperature?.value != null);
+    if (!withTemp.length) throw new Error(`no recent temperature from ${station}`);
+    return withTemp.reduce((a, b) => (Date.parse(b.timestamp) > Date.parse(a.timestamp) ? b : a));
+  });
 
 interface AlertsJson {
   features: {

@@ -130,7 +130,7 @@ export default function NowPage({ data, banners, now }: { data: ForecastResponse
           {n.low != null && <span>Low <b className="num">{n.low}°</b></span>}
         </div>
         <div className="src-note">
-          {n.source === 'ASOS' ? `Observed ${fmtTime(n.observedAt, tz)} · ${n.station}` : 'Model estimate · no fresh station report'}
+          {n.source === 'ASOS' ? `Observed ${fmtTime(n.observedAt, tz)} · ${n.station}` : 'Model estimate · no recent station report'}
         </div>
         <div className="mini-strip">
           {strip.map((h, k) => (

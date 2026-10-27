@@ -46,7 +46,7 @@ through `app/lib/base.ts` because Next does not prefix those.
 
 | What | Source | Notes |
 |------|--------|-------|
-| Now | Nearest 1 to 2 NWS ASOS stations (under 60 min old, distance-weighted when within 25 km), else Open-Meteo | When ASOS says "Clear" but the NWS grid shows 60%+ sky cover (high clouds ASOS can't see), the current-hour NWS condition is used |
+| Now | Nearest NWS stations (up to 4 within 40 km): best of distance and report age, blended with stations within 25 km reporting at about the same time; used when under 3 h old, else Open-Meteo | Blank API fields are filled from the raw METAR. The forecast nudge only uses readings under 80 min old. When ASOS says "Clear" but the NWS grid shows 60%+ sky cover (high clouds ASOS can't see), the current-hour NWS condition is used |
 | Hourly | Blend: NWS hourly 0.55, NBM 0.25, HRRR 0.15 (moves to NBM after h18), ECMWF 0.05; gusts from the NWS grid | NBM/HRRR/ECMWF come from Open-Meteo's `models=`. Observation nudge on temp and dew point for hours 0 to 5. Stale grid (over 6 h) drops NWS weight for hours 1 to 12 |
 | Days 1 to 7 | NWS forecast periods, verbatim | |
 | Days 8 to 10 | Mean of ECMWF, GFS, ICON (whichever reach that day) with spread | If NWS is down, all 10 days are Model and the UI says so |

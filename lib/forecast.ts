@@ -75,14 +75,28 @@ function fmtHour(ms: number, tz: string): string {
 /*  Now                                                                */
 /* ------------------------------------------------------------------ */
 
-interface ObsPick { station: string; obs: NwsObservation; km: number }
+interface ObsPick { station: string; obs: NwsObservation; km: number; lat: number; lon: number }
+
+/**
+ * Most stations report only hourly (around :53), and the NWS API shows each report a few minutes late.
+ * Use the station reading whenever it's under 3 hours old (the UI shows its time); the cap only catches
+ * stations that have stopped reporting. The forecast nudge is stricter, since an old reading would skew it.
+ */
+const OBS_MAX_AGE = 3 * HOUR;
+const NUDGE_MAX_AGE = 80 * 60_000;
 
 function pickObservation(list: ObsPick[], now: number): { primary: ObsPick; blend: ObsPick[] } | null {
-  const fresh = list.filter((o) => o.obs.temperature?.value != null && now - Date.parse(o.obs.timestamp) < HOUR);
-  if (!fresh.length) return null;
-  fresh.sort((a, b) => Date.parse(b.obs.timestamp) - Date.parse(a.obs.timestamp));
-  // Two fresh stations (already limited to within 25 km of each other): distance-weighted mean
-  return { primary: fresh[0], blend: fresh };
+  const usable = list.filter((o) => o.obs.temperature?.value != null && now - Date.parse(o.obs.timestamp) < OBS_MAX_AGE);
+  if (!usable.length) return null;
+  // Closest and newest wins: 1 km of distance counts the same as 2 minutes of report age
+  const score = (o: ObsPick) => o.km + (now - Date.parse(o.obs.timestamp)) / 60_000 / 2;
+  usable.sort((a, b) => score(a) - score(b));
+  const primary = usable[0];
+  const t0 = Date.parse(primary.obs.timestamp);
+  // Distance-weighted mean with nearby stations (within 25 km) reporting at about the same time
+  const blend = usable.filter((o) =>
+    distanceKm(primary.lat, primary.lon, o.lat, o.lon) <= 25 && Math.abs(Date.parse(o.obs.timestamp) - t0) <= 30 * 60_000);
+  return { primary, blend };
 }
 
 function obsMean(picks: ObsPick[], get: (o: NwsObservation) => number | null | undefined): number | null {
@@ -245,7 +259,7 @@ function buildHourly(
   }
 
   // Observation nudge: remove the "forecast says 50, it's 44" error, decaying to zero by hour 6
-  if (now.source === 'ASOS' && out.length) {
+  if (now.source === 'ASOS' && nowMs - Date.parse(now.observedAt) < NUDGE_MAX_AGE && out.length) {
     const errT = now.temp != null ? now.temp - out[0].temp : 0;
     const errD = now.dewPoint != null && out[0].dewPoint != null ? now.dewPoint - out[0].dewPoint : 0;
     for (let h = 0; h < Math.min(6, out.length); h++) {
@@ -391,9 +405,7 @@ export async function buildForecast(lat: number, lon: number): Promise<ForecastR
           const st = await nwsStations(pt, lat, lon);
           const res = await Promise.all(st.map((s) => settle(nwsLatestObs(s.id))));
           const picks: ObsPick[] = [];
-          res.forEach((r, i) => { if (r.ok) picks.push({ station: st[i].id, obs: r.v, km: st[i].km }); });
-          // Only blend two stations when they sit within 25 km of each other
-          if (picks.length === 2 && distanceKm(st[0].lat, st[0].lon, st[1].lat, st[1].lon) > 25) picks.pop();
+          res.forEach((r, i) => { if (r.ok) picks.push({ station: st[i].id, obs: r.v, km: st[i].km, lat: st[i].lat, lon: st[i].lon }); });
           return picks;
         })()),
       ])
