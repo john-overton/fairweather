@@ -1,6 +1,6 @@
 import type { NextConfig } from 'next';
 
-/** Served behind nginx at openglades.com/fairweather (see ../deploy/nginx-openglades.conf). */
+/** Served behind nginx at /fairweather (see deploy/nginx-fairweather.conf and docs/DEPLOYMENT.md). */
 export const BASE_PATH = '/fairweather';
 
 const nextConfig: NextConfig = {

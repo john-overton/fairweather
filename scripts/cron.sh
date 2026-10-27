@@ -1,11 +1,11 @@
 #!/bin/bash
-# Fairweather scheduled jobs. Calls the running Fairweather service (openglades-fairweather).
+# Fairweather scheduled jobs. Calls the running Fairweather service (deploy/fairweather.service).
 #
-# crontab -e on the server (as the service user):
-#   */2 * * * *   /srv/jroverton.com/open-glades/fairweather/scripts/cron.sh alerts
-#   */15 * * * *  /srv/jroverton.com/open-glades/fairweather/scripts/cron.sh rain
-#   17 3 * * *    /srv/jroverton.com/open-glades/fairweather/scripts/cron.sh cleanup
-#   */5 * * * *   /srv/jroverton.com/open-glades/fairweather/scripts/cron.sh radar
+# crontab -e on the server:
+#   */2 * * * *   /var/www/fairweather/scripts/cron.sh alerts
+#   */15 * * * *  /var/www/fairweather/scripts/cron.sh rain
+#   17 3 * * *    /var/www/fairweather/scripts/cron.sh cleanup
+#   */5 * * * *   /var/www/fairweather/scripts/cron.sh radar
 #
 # Reads FAIRWEATHER_CRON_SECRET (and optional FAIRWEATHER_BASE_URL) from .env.local next to package.json.
 
