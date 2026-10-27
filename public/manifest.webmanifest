@@ -1,0 +1,23 @@
+{
+  "id": "/fairweather",
+  "name": "Fairweather",
+  "short_name": "Fairweather",
+  "description": "Personal, ad-free weather. NWS forecasts, observations, alerts, and radar. No login.",
+  "start_url": "/fairweather#now",
+  "scope": "/fairweather",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#e7ecf0",
+  "theme_color": "#e7ecf0",
+  "categories": ["weather"],
+  "icons": [
+    { "src": "/fairweather/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/fairweather/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/fairweather/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/fairweather/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Radar", "url": "/fairweather#radar" },
+    { "name": "10-Day", "url": "/fairweather#ten-day" }
+  ]
+}
