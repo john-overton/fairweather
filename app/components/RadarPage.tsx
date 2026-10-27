@@ -384,7 +384,6 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
   if (manifestError) note = { text: "Couldn't load the radar schedule. Showing the past 2 hours.", warn: true };
   else if (manifest?.stale) note = { text: `Radar delayed · newest frame ${staleMin} min old`, warn: true };
   else if (future && manifest && !manifest.run) note = { text: 'Forecast radar unavailable right now', warn: true };
-  else if (layer === 'ptype' && !isFuture) note = { text: 'Observed frames show reflectivity · type shown on forecast frames' };
 
   if (!token) {
     return (
@@ -492,7 +491,7 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
               <span className="sw"><i style={{ background: '#40aa5d' }} />Rain</span>
               <span className="sw"><i style={{ background: '#1b8db3' }} />Snow</span>
               <span className="sw"><i style={{ background: 'linear-gradient(90deg,#9e9ac8 50%,#fcc2aa 50%)' }} />Ice / mix</span>
-              <span style={{ marginLeft: 'auto' }}>HRRR ptype</span>
+              <span style={{ marginLeft: 'auto' }}>{isFuture ? 'HRRR' : 'MRMS'}</span>
             </>
           )}
         </div>

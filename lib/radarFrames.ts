@@ -16,6 +16,8 @@ export const FCST_STEP_MIN = 30;
 /** Observed N0Q mosaic is ~1 km; HRRR is a 3 km model, so z6 forecast tiles lose nothing and cost 1/16 as much. */
 export const OBS_MAXZOOM = 8;
 export const FCST_MAXZOOM = 6;
+/** Observed precip type is rendered by this server from MRMS's 0.01° grid; z7 matches it */
+export const PTYPE_MAXZOOM = 7;
 /** HRRR forecast tiles cover the lower 48 only */
 export const HRRR_BOUNDS: LngLatBox = [-126, 23.2, -65, 50];
 
@@ -44,10 +46,12 @@ export function buildFrames(m: RadarManifest | null, win: Win, future: boolean, 
 }
 
 /**
- * IEM tile layer for a frame. IEM's `ridge::USCOMP-N0Q-*` tiles are a national mosaic that already
- * includes Alaska, Hawaii, and Puerto Rico; forecast frames are HRRR (lower 48) pinned to one run.
+ * Tile layer for a frame. IEM's `ridge::USCOMP-N0Q-*` tiles are a national mosaic that already
+ * includes Alaska, Hawaii, and Puerto Rico. Observed precip type (`mrms::PTYPE-*`) is rendered by
+ * this server from MRMS. Forecast frames are HRRR (lower 48) pinned to one run.
  */
 export function frameTileLayer(frame: Frame, layer: RadarLayer, run: string | null): { name: string; bounds?: LngLatBox; maxzoom: number } {
+  if (!frame.future && layer === 'ptype') return { name: `mrms::PTYPE-${stamp(frame.time)}`, maxzoom: PTYPE_MAXZOOM };
   if (!frame.future) return { name: `ridge::USCOMP-N0Q-${stamp(frame.time)}`, maxzoom: OBS_MAXZOOM };
   const f = String(frame.minute).padStart(4, '0');
   return { name: `hrrr::${layer === 'ptype' ? 'REFP' : 'REFD'}-F${f}-${stamp(Date.parse(run!))}`, bounds: HRRR_BOUNDS, maxzoom: FCST_MAXZOOM };

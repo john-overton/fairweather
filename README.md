@@ -53,6 +53,7 @@ through `app/lib/base.ts` because Next does not prefix those.
 | Alerts | NWS `/alerts/active` | |
 | AQI | EPA AirNow if `AIRNOW_API_KEY`, else CAMS via Open-Meteo | |
 | Radar, observed | IEM NEXRAD N0Q composite archive (5-min mosaics) | Base reflectivity; one national mosaic covering the lower 48, Alaska, Hawaii, and Puerto Rico |
+| Radar, observed precip type | NOAA MRMS `PrecipFlag` + `MergedBaseReflectivityQC` from AWS (`noaa-mrms-pds`), lower 48, Alaska, Hawaii | Rendered to tiles by this server (`lib/mrms.ts`, GRIB2 template 5.41 decoded with `lib/png.ts`): rain greens to red, snow blues, rain with hail pink |
 | Radar, forecast | IEM HRRR tiles (`REFD`, `REFP` for precip type), pinned to the newest complete run | Lower 48 only; never mixes runs |
 
 Server responses are cached in memory (forecast 10 min, points 24 h, alerts 2 min).
@@ -82,7 +83,8 @@ is its identity and its `auth` secret is the credential for prefs/unsubscribe/te
 ## Differences from the build spec
 
 - No Cloudflare: Next.js API routes + SQLite + crontab on the existing server.
-- No GRIB2 radar job yet. Radar uses IEM tiles, so the Composite and 1-hr rain layers are not
+- No separate radar job. Reflectivity uses IEM tiles; observed precip type is decoded from MRMS GRIB2 on
+  demand in the app server. The Composite and 1-hr rain layers are not
   offered (IEM's MRMS 1-hr tiles paint no-data areas opaque gray). Observed frames are 10 min
   apart for 2 h/6 h and 30 min for 24 h; forecast frames are 30 min apart, to keep phone GPU
   memory reasonable. Change `OBS_STEP_MIN` / `FCST_STEP_MIN` in `RadarPage.tsx`.
