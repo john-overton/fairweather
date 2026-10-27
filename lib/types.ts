@@ -124,6 +124,8 @@ export interface ForecastMeta {
   /** Plain-language problems the UI should surface, e.g. "Couldn't reach NWS. …" */
   errors: string[];
   nwsOk: boolean;
+  /** True when NWS has no forecast for this point (outside the US and its territories) */
+  outsideNws: boolean;
 }
 
 export interface ForecastResponse {

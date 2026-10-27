@@ -29,13 +29,20 @@ export function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Pro
   return p;
 }
 
+/** Non-2xx response from an upstream API; `status` lets callers tell "no data here" (404) from an outage. */
+export class HttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
 async function getJson<T>(url: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const res = await fetch(url, {
     ...init,
     signal: AbortSignal.timeout(init?.timeoutMs ?? 9000),
     cache: 'no-store',
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+  if (!res.ok) throw new HttpError(res.status, `${res.status} ${res.statusText} from ${new URL(url).host}`);
   return res.json() as Promise<T>;
 }
 

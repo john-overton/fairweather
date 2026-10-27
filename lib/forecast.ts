@@ -13,7 +13,7 @@ import {
   hPaToInHg, kmhToMph, localParts, mToMi, paToInHg,
 } from './conditions';
 import {
-  BLEND_MODELS, RANGE_MODELS, airQuality, expandGrid, nwsAlertsPoint, nwsForecast, nwsGrid, nwsHourly,
+  BLEND_MODELS, HttpError, RANGE_MODELS, airQuality, expandGrid, nwsAlertsPoint, nwsForecast, nwsGrid, nwsHourly,
   nwsLatestObs, nwsPoint, nwsStations, omBest, omModels,
   type NwsAlertProps, type NwsObservation, type NwsPeriod, type NwsPoint, type OmBest, type OmModels,
 } from './sources';
@@ -391,6 +391,8 @@ export async function buildForecast(lat: number, lon: number): Promise<ForecastR
   if (!omR.ok) throw new Error("Couldn't reach Open-Meteo");
   const om = omR.v;
   const pt: NwsPoint | null = valOf(ptR);
+  // NWS answers 404 for points it doesn't forecast (outside the US and its territories): not an outage
+  const outsideNws = !ptR.ok && ptR.e instanceof HttpError && ptR.e.status === 404;
   const models = valOf(mR);
   // Open-Meteo's zone comes from the coordinates; NWS reports America/New_York for Puerto Rico
   const tz = om.timezone || pt?.tz || 'America/Chicago';
@@ -442,7 +444,9 @@ export async function buildForecast(lat: number, lon: number): Promise<ForecastR
     days = days.concat(modelDays(models, om, tz, next, 10 - days.length));
   } else {
     days = modelDays(models, om, tz, today, 10);
-    errors.push("Couldn't reach NWS. Showing model data for all 10 days.");
+    errors.push(outsideNws
+      ? 'This place is outside National Weather Service coverage, so Fairweather is showing model data only: no station readings, alerts, or radar.'
+      : "Couldn't reach NWS. Showing model data for all 10 days.");
   }
   if (fc && !hr) errors.push("Couldn't reach the NWS hourly forecast. Showing model data for the next 24 hours.");
   if (pt && !alR.ok) errors.push("Couldn't check NWS alerts. Trying again in 2 minutes.");
@@ -473,6 +477,7 @@ export async function buildForecast(lat: number, lon: number): Promise<ForecastR
       zones: pt?.zones ?? [],
       errors,
       nwsOk: !!fc,
+      outsideNws,
     },
   };
 }

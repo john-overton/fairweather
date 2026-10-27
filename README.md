@@ -7,6 +7,10 @@ high-resolution models, adds a full radar loop with an HRRR forecast, and instal
 home screen as an app with push alerts. Saved places and settings stay in your browser: there are no
 accounts and no tracking.
 
+Coverage: all 50 states, Puerto Rico, and the U.S. Virgin Islands (wherever the National Weather
+Service forecasts). Elsewhere it falls back to model-only forecasts, without station readings, alerts,
+or radar.
+
 <p align="center">
   <img src="docs/screenshots/fairweather-screens.png" alt="Fairweather on iPhone: Now, Hourly, 10-Day, Radar, and the theme picker">
 </p>
