@@ -1,59 +1,10 @@
 /**
- * Minimal PNG codec on Node's zlib (no dependencies).
- * decodeGray: 8- or 16-bit grayscale, non-interlaced (what MRMS GRIB2 template 5.41 embeds).
- * encodeRGBA: 8-bit RGBA, used for rendered radar tiles.
+ * Minimal PNG encoder on Node's zlib (no dependencies), used for rendered radar tiles.
+ * (Decoding MRMS's embedded PNGs happens in lib/workers/mrms-decode.mjs.)
  */
 import zlib from 'node:zlib';
 
 const SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-export interface GrayImage { width: number; height: number; data: Uint8Array | Uint16Array }
-
-export function decodeGray(png: Buffer): GrayImage {
-  if (!png.subarray(0, 8).equals(SIG)) throw new Error('not a PNG');
-  let width = 0, height = 0, depth = 0, colorType = 0, interlace = 0;
-  const idat: Buffer[] = [];
-  for (let i = 8; i < png.length;) {
-    const len = png.readUInt32BE(i);
-    const type = png.toString('ascii', i + 4, i + 8);
-    const body = png.subarray(i + 8, i + 8 + len);
-    if (type === 'IHDR') {
-      width = body.readUInt32BE(0); height = body.readUInt32BE(4);
-      depth = body[8]; colorType = body[9]; interlace = body[12];
-    } else if (type === 'IDAT') idat.push(body);
-    else if (type === 'IEND') break;
-    i += 12 + len;
-  }
-  if (colorType !== 0 || (depth !== 8 && depth !== 16) || interlace) {
-    throw new Error(`unsupported PNG (color ${colorType}, depth ${depth}, interlace ${interlace})`);
-  }
-  const raw = zlib.inflateSync(Buffer.concat(idat));
-  const bpp = depth / 8, stride = width * bpp;
-  const out = Buffer.alloc(stride * height);
-  let prev = Buffer.alloc(stride);
-  for (let y = 0; y < height; y++) {
-    const filter = raw[y * (stride + 1)];
-    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
-    const cur = out.subarray(y * stride, (y + 1) * stride);
-    for (let x = 0; x < stride; x++) {
-      const a = x >= bpp ? cur[x - bpp] : 0, b = prev[x], c = x >= bpp ? prev[x - bpp] : 0;
-      let v = line[x];
-      if (filter === 1) v += a;
-      else if (filter === 2) v += b;
-      else if (filter === 3) v += (a + b) >> 1;
-      else if (filter === 4) {
-        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
-        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
-      }
-      cur[x] = v & 0xff;
-    }
-    prev = cur;
-  }
-  if (depth === 8) return { width, height, data: new Uint8Array(out.buffer, out.byteOffset, out.length) };
-  const data = new Uint16Array(width * height);
-  for (let i = 0; i < data.length; i++) data[i] = (out[2 * i] << 8) | out[2 * i + 1];
-  return { width, height, data };
-}
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);

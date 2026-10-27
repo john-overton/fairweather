@@ -4,11 +4,14 @@
  * Per frame and domain, two 2-minute GRIB2 products on the same 0.01° grid:
  *   PrecipFlag_00.00                  type (rain, snow, rain with hail)
  *   MergedBaseReflectivityQC_00.50    intensity (dBZ)
- * Both use GRIB2 data template 5.41 (the field is a grayscale PNG), decoded with lib/png.ts.
+ * Both use GRIB2 data template 5.41 (the field is a grayscale PNG). Downloading and decoding a frame
+ * (~1 s of CPU for CONUS) runs in a worker thread, lib/workers/mrms-decode.mjs, so the server keeps
+ * answering requests meanwhile. Tile drawing (1 to 2 ms) stays here.
  */
-import zlib from 'node:zlib';
+import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 
-import { decodeGray, encodeRGBA } from './png';
+import { encodeRGBA } from './png';
 import { cached } from './sources';
 
 const BUCKET = 'https://noaa-mrms-pds.s3.amazonaws.com';
@@ -69,73 +72,59 @@ export async function latestPtypeTime(): Promise<number> {
 }
 
 /* ------------------------------------------------------------------ */
-/*  GRIB2 (single field, lat/lon grid, template 5.41)                  */
+/*  Decode worker                                                      */
 /* ------------------------------------------------------------------ */
 
-interface Field { nx: number; ny: number; la1: number; lo1: number; di: number; dj: number; values: (i: number) => number }
+// Loaded from disk rather than bundled; the service runs from the app directory
+const WORKER_PATH = path.join(/* turbopackIgnore: true */ process.cwd(), 'lib', 'workers', 'mrms-decode.mjs');
+let worker: Worker | null = null;
+let seq = 0;
+const pending = new Map<number, { resolve: (g: FrameGrid) => void; reject: (e: Error) => void }>();
 
-function parseGrib(buf: Buffer): Field {
-  if (buf.toString('ascii', 0, 4) !== 'GRIB' || buf[7] !== 2) throw new Error('not GRIB2');
-  let nx = 0, ny = 0, la1 = 0, lo1 = 0, di = 0, dj = 0, R = 0, E = 0, D = 0, tpl = -1;
-  let png: Buffer | null = null;
-  for (let i = 16; i < buf.length - 4;) {
-    if (buf.toString('ascii', i, i + 4) === '7777') break;
-    const len = buf.readUInt32BE(i);
-    const sec = buf[i + 4];
-    if (sec === 3) {
-      if (buf.readUInt16BE(i + 12) !== 0) throw new Error('unsupported grid template');
-      nx = buf.readUInt32BE(i + 30); ny = buf.readUInt32BE(i + 34);
-      la1 = buf.readInt32BE(i + 46) / 1e6; lo1 = buf.readUInt32BE(i + 50) / 1e6;
-      di = buf.readUInt32BE(i + 63) / 1e6; dj = buf.readUInt32BE(i + 67) / 1e6;
-      if (buf[i + 71] !== 0) throw new Error('unsupported scan mode');
-    } else if (sec === 5) {
-      tpl = buf.readUInt16BE(i + 9);
-      R = buf.readFloatBE(i + 11); E = buf.readInt16BE(i + 15); D = buf.readInt16BE(i + 17);
-    } else if (sec === 7) {
-      png = buf.subarray(i + 5, i + len);
-    }
-    i += len;
-  }
-  if (tpl !== 41 || !png) throw new Error(`unsupported data template ${tpl}`);
-  const img = decodeGray(png);
-  if (img.width !== nx || img.height !== ny) throw new Error('grid/image size mismatch');
-  const scaleE = 2 ** E, scaleD = 10 ** D;
-  return {
-    nx, ny, la1, lo1: lo1 > 180 ? lo1 - 360 : lo1, di, dj,
-    values: (k) => (R + img.data[k] * scaleE) / scaleD,
-  };
+function failAll(err: Error) {
+  for (const p of pending.values()) p.reject(err);
+  pending.clear();
+  worker = null;
 }
 
-async function fetchField(key: string): Promise<Field> {
-  const res = await fetch(`${BUCKET}/${key}`, { signal: AbortSignal.timeout(30000), cache: 'no-store' });
-  if (!res.ok) throw new Error(`MRMS ${res.status} ${key}`);
-  return parseGrib(zlib.gunzipSync(Buffer.from(await res.arrayBuffer())));
+function decodeWorker(): Worker {
+  if (worker) return worker;
+  const w = new Worker(WORKER_PATH);
+  w.on('message', (m: { id: number; grid?: FrameGrid; error?: string }) => {
+    const p = pending.get(m.id);
+    if (!p) return;
+    pending.delete(m.id);
+    if (m.grid) p.resolve(m.grid);
+    else p.reject(new Error(m.error ?? 'decode failed'));
+  });
+  w.on('error', (e) => failAll(e));
+  w.on('exit', (code) => { if (worker === w) failAll(new Error(`MRMS worker exited (${code})`)); });
+  w.unref(); // never keeps the process alive on its own
+  worker = w;
+  return w;
+}
+
+function decodeInWorker(flagKey: string, refKey: string): Promise<FrameGrid> {
+  return new Promise((resolve, reject) => {
+    const id = ++seq;
+    pending.set(id, { resolve, reject });
+    decodeWorker().postMessage({ id, flagUrl: `${BUCKET}/${flagKey}`, refUrl: `${BUCKET}/${refKey}` });
+  });
 }
 
 /* ------------------------------------------------------------------ */
 /*  Combined frame grid: one byte per cell = (type << 4) | dBZ bin     */
 /* ------------------------------------------------------------------ */
 
-const NONE = 0, RAIN = 1, SNOW = 2, MIX = 3;
-/** PrecipFlag codes: 1 warm stratiform, 3 snow, 6 convective, 7 rain with hail, 10 cold stratiform, 91/96 tropical */
-const FLAG_TYPE: Record<number, number> = { 1: RAIN, 3: SNOW, 6: RAIN, 7: MIX, 10: RAIN, 91: RAIN, 96: RAIN };
+// Cell types, set by the worker
+const RAIN = 1, SNOW = 2, MIX = 3;
 
 interface FrameGrid { nx: number; ny: number; la1: number; lo1: number; di: number; dj: number; cells: Uint8Array }
 
 async function buildGrid(domain: string, t: number): Promise<FrameGrid | null> {
   const [fk, rk] = await Promise.all([keyAtOrBefore(domain, PRODUCTS.flag, t), keyAtOrBefore(domain, PRODUCTS.ref, t)]);
   if (!fk || !rk) return null;
-  const [flag, ref] = await Promise.all([fetchField(fk), fetchField(rk)]);
-  if (flag.nx !== ref.nx || flag.ny !== ref.ny) throw new Error(`${domain} grids differ`);
-  const cells = new Uint8Array(flag.nx * flag.ny);
-  for (let k = 0; k < cells.length; k++) {
-    const type = FLAG_TYPE[Math.round(flag.values(k))] ?? NONE;
-    if (!type) continue;
-    const dbz = ref.values(k);
-    if (!(dbz >= 5)) continue;
-    cells[k] = (type << 4) | Math.min(14, Math.floor(dbz / 5));
-  }
-  return { nx: flag.nx, ny: flag.ny, la1: flag.la1, lo1: flag.lo1, di: flag.di, dj: flag.dj, cells };
+  return decodeInWorker(fk, rk);
 }
 
 // A CONUS grid is 24.5 MB; keep the few frames being rendered right now
