@@ -90,6 +90,155 @@ body {
 .mini-strip div { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: var(--fw-muted); }
 .mini-strip svg { width: 26px; height: 26px; color: var(--fw-ink); }
 .mini-strip b { font-size: 15px; color: var(--fw-ink); font-weight: 600; }
+/* Hero sky (HeroSky.tsx) and illustrated icon (HeroIcon.tsx). Light tokens first, dark overrides after. */
+:root {
+  --cl-body: rgba(255, 255, 255, .72); --cl-shade: rgba(78, 96, 118, .2); --cl-light: rgba(255, 255, 255, .9);
+  --sky-star: #7d93ab; --sky-snow: #9db4d2; --sky-fog: rgba(255, 255, 255, .62); --sky-mist: rgba(70, 100, 140, .12);
+  --sky-rain: rgba(42, 92, 160, .4); --sky-streak: rgba(15, 27, 38, .2); --sky-flare: rgba(255, 170, 60, .07);
+  --sky-vignette: rgba(30, 45, 62, .1); --sky-mote: rgba(255, 190, 90, .7);
+  --tint-top: rgba(0, 0, 0, 0); --tint-bot: rgba(0, 0, 0, 0);
+  --hi-edge: rgba(15, 27, 38, .16); --hi-halo: #8ea4ba; --hi-sparkle: #7d93ab; --hi-flake: #5d9be0; --hi-fog: #8494a6; --hi-gust: var(--fw-ink);
+}
+:root[data-theme="dark"] {
+  --cl-body: rgba(196, 210, 228, .2); --cl-shade: rgba(0, 0, 0, .26); --cl-light: rgba(255, 255, 255, .16);
+  --sky-star: #e8eef8; --sky-snow: rgba(236, 243, 250, .92); --sky-fog: rgba(190, 202, 216, .13); --sky-mist: rgba(110, 160, 220, .08);
+  --sky-rain: rgba(140, 190, 245, .4); --sky-streak: rgba(230, 237, 243, .14); --sky-flare: rgba(255, 200, 120, .045);
+  --sky-vignette: rgba(0, 0, 0, .32); --sky-mote: rgba(255, 214, 140, .7);
+  --hi-edge: rgba(0, 0, 0, 0); --hi-halo: #c3d2e0; --hi-sparkle: #fff; --hi-flake: #eaf4ff; --hi-fog: #c5d0dc;
+}
+/* Condition tints over the theme's hero gradient */
+.sky-clear.is-day { --tint-top: rgba(80, 160, 255, .16); --tint-bot: rgba(255, 186, 110, .16); }
+.sky-pcloudy.is-day { --tint-top: rgba(80, 160, 255, .12); --tint-bot: rgba(255, 186, 110, .1); }
+.sky.is-night:is(.sky-clear, .sky-pcloudy, .sky-wind) { --tint-top: rgba(20, 35, 80, .18); }
+.sky-cloudy { --tint-top: rgba(90, 105, 125, .14); --tint-bot: rgba(90, 105, 125, .04); }
+.sky-rain { --tint-top: rgba(60, 75, 95, .24); --tint-bot: rgba(60, 90, 130, .1); --cl-body: rgba(168, 180, 196, .55); --cl-shade: rgba(55, 68, 86, .26); --cl-light: rgba(255, 255, 255, .45); }
+.sky-storm { --tint-top: rgba(30, 40, 58, .3); --tint-bot: rgba(40, 50, 72, .1); --cl-body: rgba(110, 120, 136, .3); --cl-shade: rgba(40, 50, 64, .2); --cl-light: rgba(235, 238, 248, .3); }
+.sky-snow { --tint-top: rgba(200, 220, 245, .26); --tint-bot: rgba(255, 255, 255, .36); }
+.sky-fog { --tint-top: rgba(255, 255, 255, .12); --tint-bot: rgba(255, 255, 255, .42); }
+.sky-wind.is-day { --tint-top: rgba(80, 160, 255, .1); }
+:root[data-theme="dark"] .sky-clear.is-day { --tint-top: rgba(70, 140, 230, .16); --tint-bot: rgba(255, 170, 90, .1); }
+:root[data-theme="dark"] .sky-pcloudy.is-day { --tint-top: rgba(70, 140, 230, .1); --tint-bot: rgba(255, 170, 90, .06); }
+:root[data-theme="dark"] .sky.is-night:is(.sky-clear, .sky-pcloudy, .sky-wind) { --tint-top: rgba(2, 6, 22, .5); }
+:root[data-theme="dark"] .sky-cloudy { --tint-top: rgba(0, 0, 0, .14); --tint-bot: rgba(0, 0, 0, .04); }
+:root[data-theme="dark"] .sky-rain { --tint-top: rgba(0, 0, 0, .26); --tint-bot: rgba(20, 40, 70, .16); --cl-body: rgba(150, 165, 185, .14); --cl-shade: rgba(0, 0, 0, .28); --cl-light: rgba(255, 255, 255, .07); }
+:root[data-theme="dark"] .sky-storm { --tint-top: rgba(0, 0, 0, .46); --tint-bot: rgba(10, 10, 30, .26); --cl-body: rgba(10, 14, 22, .5); --cl-shade: rgba(0, 0, 0, .4); --cl-light: rgba(150, 165, 190, .1); }
+:root[data-theme="dark"] .sky-snow { --tint-top: rgba(170, 200, 240, .07); --tint-bot: rgba(220, 235, 255, .1); }
+:root[data-theme="dark"] .sky-fog { --tint-top: rgba(160, 170, 185, .05); --tint-bot: rgba(170, 180, 195, .14); }
+:root[data-theme="dark"] .sky-wind.is-day { --tint-top: rgba(60, 120, 200, .08); }
+.hero { isolation: isolate; }
+.sky { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.hero > :not(.sky) { position: relative; }
+
+/* Clouds: three depths, nearer is bigger, brighter, and faster */
+.sky .drift { animation: sky-drift linear infinite; }
+.sky .clouds.far { opacity: .55; }
+.sky .clouds.mid { opacity: .85; }
+/* Dark storm clouds over dark text: keep the nearest layer light enough to read through */
+:root[data-theme="light"] .sky-storm .clouds.near { opacity: .6; }
+@keyframes sky-drift { from { transform: translateX(-380px); } to { transform: translateX(440px); } }
+
+/* Sun: bloom and corona breathe, two ray fans turn against each other, motes float up */
+.sky .bloom, .sky .corona { transform-box: fill-box; transform-origin: center; animation: sky-breathe 10s ease-in-out infinite alternate; }
+.sky .corona { animation-duration: 6s; }
+.sky .sunlight.dim .bloom { opacity: .45; }
+.sky .sunlight.dim .corona { opacity: .7; }
+.sky .beams { transform-box: fill-box; transform-origin: center; }
+.sky .beams.a { animation: sky-spin 220s linear infinite; }
+.sky .beams.b { animation: sky-spin 340s linear infinite reverse; }
+.sky .flares { animation: sky-flare 12s ease-in-out infinite alternate; }
+.sky .mote { fill: var(--sky-mote); animation: sky-mote ease-in-out infinite; }
+@keyframes sky-breathe { from { transform: scale(.93); opacity: .85; } to { transform: scale(1.06); opacity: 1; } }
+@keyframes sky-spin { to { transform: rotate(360deg); } }
+@keyframes sky-flare { from { opacity: .55; } to { opacity: 1; } }
+@keyframes sky-mote { 0% { transform: translate(0, 0); opacity: 0; } 20% { opacity: .9; } 80% { opacity: .6; } 100% { transform: translate(14px, -46px); opacity: 0; } }
+
+/* Night: Milky Way dust, two twinkling star fields, bright glints, meteors */
+.sky .star-dust { fill: var(--sky-star); opacity: .35; }
+.sky .stars { fill: var(--sky-star); animation: sky-twinkle ease-in-out infinite alternate; }
+.sky .stars.s1 { animation-duration: 4s; }
+.sky .stars.s2 { animation-duration: 6s; animation-delay: -3s; }
+.sky .glint { fill: var(--sky-star); transform-box: fill-box; transform-origin: center; animation: sky-glint ease-in-out infinite alternate; }
+.sky .shooting { fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 40 300; opacity: 0; animation: sky-shoot 14s ease-out infinite; }
+.sky .shooting.one { animation-delay: 3s; }
+.sky .shooting.two { animation-delay: 10s; animation-duration: 19s; }
+@keyframes sky-twinkle { from { opacity: .45; } to { opacity: 1; } }
+@keyframes sky-glint { from { transform: scale(.45) rotate(0deg); opacity: .35; } to { transform: scale(1) rotate(20deg); opacity: 1; } }
+@keyframes sky-shoot { 0% { stroke-dashoffset: 40; opacity: 1; } 6%, 100% { stroke-dashoffset: -140; opacity: 0; } }
+
+/* Rain: tiled layers fall as one; near drops are longer, brighter, and faster */
+.sky .rain-layer { fill: var(--sky-rain); transform-box: fill-box; transform-origin: center; animation: sky-rain linear infinite; }
+.sky .rain-layer.far { opacity: .45; }
+.sky .rain-layer.mid { opacity: .75; }
+@keyframes sky-rain { from { transform: rotate(10deg) translateY(0); } to { transform: rotate(10deg) translateY(480px); } }
+.sky-storm .rain-layer { animation-name: sky-rain-storm; }
+@keyframes sky-rain-storm { from { transform: rotate(17deg) translateY(0); } to { transform: rotate(17deg) translateY(480px); } }
+.sky .splash { fill: none; stroke: var(--sky-rain); stroke-width: 1; stroke-opacity: .6; transform-box: fill-box; transform-origin: center; animation: sky-splash ease-out infinite; }
+@keyframes sky-splash { 0% { transform: scale(.15); opacity: 0; } 15% { opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
+
+/* Snow: far and mid fields fall as layers and sway; near bokeh flakes and crystals fall alone */
+.sky .snow-layer { fill: var(--sky-snow); animation: sky-snowfall linear infinite; }
+.sky .snow-sway { animation: sky-sway ease-in-out infinite alternate; }
+.sky .snow-sway.far { opacity: .55; }
+.sky .snow-sway.mid { opacity: .8; }
+.sky .snow-near .fall { animation: sky-fall linear infinite; }
+.sky .snow-near .sway { animation: sky-sway ease-in-out infinite alternate; }
+.sky .crystal { fill: none; stroke: var(--sky-snow); stroke-width: .9; stroke-linecap: round; opacity: .8; animation: sky-spin linear infinite; }
+@keyframes sky-snowfall { from { transform: translateY(0); } to { transform: translateY(420px); } }
+@keyframes sky-fall { from { transform: translateY(-20px); } to { transform: translateY(430px); } }
+@keyframes sky-sway { from { transform: translateX(-8px); } to { transform: translateX(8px); } }
+
+/* Fog banks drift at different depths and speeds */
+.sky .fog-bank { animation: sky-bank ease-in-out infinite alternate; }
+.sky .fog-bank.far { opacity: .6; }
+@keyframes sky-bank { from { transform: translateX(-70px); } to { transform: translateX(70px); } }
+
+/* Wind: gusts race along curved paths, leaves tumble across */
+.sky .streak { fill: none; stroke: var(--sky-streak); stroke-linecap: round; stroke-dasharray: .16 1.4; animation: sky-gust linear infinite; }
+.sky .streak.far { stroke-width: 1.2; opacity: .6; animation-duration: 4.4s; }
+.sky .streak.near { stroke-width: 2.4; animation-duration: 2.8s; }
+.sky .leaf-path { animation: sky-leaf-x linear infinite; }
+.sky .leaf { animation: sky-leaf-spin linear infinite; }
+@keyframes sky-gust { from { stroke-dashoffset: .16; } to { stroke-dashoffset: -1.4; } }
+@keyframes sky-leaf-x { 0% { transform: translate(-30px, 0); } 30% { transform: translate(110px, -26px); } 60% { transform: translate(250px, 10px); } 100% { transform: translate(440px, -30px); } }
+@keyframes sky-leaf-spin { to { transform: rotate(360deg); } }
+
+/* Storm: bolts between cloud layers, the clouds around them light up, then the whole sky flashes */
+.sky .bolt { fill: none; stroke: #f4f1ff; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; opacity: 0; filter: drop-shadow(0 0 6px #b9b2ff); }
+.sky .bolt.one, .sky .cloud-lit.one { animation: sky-bolt 7s 2s infinite; }
+.sky .bolt.two, .sky .cloud-lit.two { animation: sky-bolt 11s 5.5s infinite; }
+.sky .cloud-lit { opacity: 0; }
+.sky .flash { fill: #fff; opacity: 0; animation: sky-flash 7s 2s infinite; }
+@keyframes sky-bolt { 0%, 88%, 100% { opacity: 0; } 89% { opacity: 1; } 90% { opacity: .2; } 91.5% { opacity: .9; } 94% { opacity: 0; } }
+@keyframes sky-flash { 0%, 88%, 100% { opacity: 0; } 89% { opacity: .2; } 90% { opacity: .03; } 91.5% { opacity: .14; } 94% { opacity: 0; } }
+
+/* Illustrated hero icon */
+.hero-ico.hi { overflow: visible; width: clamp(92px, 27vw, 148px); margin: -6px -4px 0 0; }
+.hi .hi-rays { transform-box: fill-box; transform-origin: center; animation: sky-spin 30s linear infinite; }
+.hi .hi-glow { transform-box: fill-box; transform-origin: center; animation: sky-breathe 4s ease-in-out infinite alternate; }
+.hi .hi-disk { transform-box: fill-box; transform-origin: center; animation: hi-pulse 4s ease-in-out infinite alternate; }
+.hi .hi-crescent { transform-box: fill-box; transform-origin: center; animation: hi-rock 8s ease-in-out infinite alternate; }
+.hi .hi-sparkle { transform-box: fill-box; transform-origin: center; animation: sky-glint 2.2s ease-in-out infinite alternate; }
+.hi .hi-cloud-front { animation: hi-bob 5s ease-in-out infinite alternate; }
+.hi .hi-cloud-back { animation: hi-drift 7s ease-in-out infinite alternate; }
+.hi .hi-drop { animation: hi-drop 1.3s ease-in infinite; }
+.hi .hi-flake { animation: hi-flake 2.8s linear infinite; }
+.hi .hi-spin { animation: sky-spin 4s linear infinite; }
+.hi .hi-bolt { animation: hi-bolt 7s 2s infinite; }
+.hi .hi-flash { opacity: 0; animation: sky-bolt 7s 2s infinite; }
+.hi .hi-fogbar { animation: hi-fog 3.2s ease-in-out infinite alternate; }
+.hi .hi-gust { stroke-dasharray: 1 1; animation: hi-gust 2.6s ease-in-out infinite alternate; }
+.hi .hi-leaf { animation: hi-leaf 4s ease-in-out infinite; }
+@keyframes hi-pulse { from { transform: scale(.96); } to { transform: scale(1.04); } }
+@keyframes hi-rock { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+@keyframes hi-bob { from { transform: translateY(-.8px); } to { transform: translateY(.8px); } }
+@keyframes hi-drift { from { transform: translateX(-1.6px); } to { transform: translateX(1.6px); } }
+@keyframes hi-drop { 0% { transform: translate(0, -3px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(-2px, 11px); opacity: 0; } }
+@keyframes hi-flake { 0% { transform: translate(0, -3px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(2px, 11px); opacity: 0; } }
+@keyframes hi-bolt { 0%, 86%, 96%, 100% { opacity: .85; filter: none; } 89%, 92% { opacity: 1; filter: drop-shadow(0 0 3px #ffe27a); } 90.5% { opacity: .4; } }
+@keyframes hi-fog { from { transform: translateX(-2.5px); } to { transform: translateX(2.5px); } }
+@keyframes hi-gust { from { stroke-dashoffset: .35; } to { stroke-dashoffset: -.25; } }
+@keyframes hi-leaf { 0% { transform: translate(26px, 4px) rotate(0deg); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translate(62px, -10px) rotate(540deg); opacity: 0; } }
+
 .src-note { font-family: var(--f-mono); font-size: 10.5px; color: var(--fw-muted); letter-spacing: .04em; }
 
 .wx-alert { grid-column: 1 / -1; background: var(--fw-warn-bg); border: 1px solid var(--fw-warn-line); border-radius: 14px; padding: 10px 12px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; text-align: left; width: 100%; min-height: 44px; }

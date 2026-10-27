@@ -2,9 +2,11 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 
-import type { ForecastResponse, WxAlert } from '@/lib/types';
+import type { Cond, ForecastResponse, WxAlert } from '@/lib/types';
 
 import { aqiInfo, degToCompass, dewComfort, fmtHour, fmtTime, fmtTimeTz, fmtWeekday, unwrap, uvLabel } from '../lib/format';
+import HeroIcon from './HeroIcon';
+import HeroSky from './HeroSky';
 import { ChevronDown, WarnIcon, WxIcon } from './Icons';
 
 const HOUR = 3600_000;
@@ -79,7 +81,7 @@ function Compass({ deg }: { deg: number | null }) {
         let arrow = null;
         if (deg != null) {
           // Arrow points where the wind is going
-          const a = ((deg + 180) * Math.PI) / 180, len = R * 0.68, head = Math.max(7, R * 0.2), sw = Math.max(2.4, R * 0.045);
+          const a = ((deg + 180) * Math.PI) / 180, len = R * 0.52, head = Math.max(7, R * 0.2), sw = Math.max(2.4, R * 0.045);
           const [tx, ty] = at(a, len), [bx, by] = at(a + Math.PI, len);
           arrow = (
             <g stroke="var(--fw-ink)" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" fill="none">
@@ -92,7 +94,7 @@ function Compass({ deg }: { deg: number | null }) {
         return (
           <>
             {ticks}
-            <text x={cx} y={cy - R * 0.62} textAnchor="middle" dominantBaseline="middle" fontSize={font} fontWeight="700" fill="var(--fw-muted)">N</text>
+            <text x={cx} y={cy - R * 0.68} textAnchor="middle" dominantBaseline="middle" fontSize={font} fontWeight="700" fill="var(--fw-muted)">N</text>
             {arrow}
           </>
         );
@@ -254,6 +256,10 @@ export default function NowPage({ data, banners, now }: { data: ForecastResponse
   const aqi = n.aqi != null ? aqiInfo(n.aqi) : null;
   const trendArrow = n.pressureTrend === 'up' ? ' ↑' : n.pressureTrend === 'down' ? ' ↓' : n.pressureTrend === 'steady' ? ' →' : '';
   const hasBanners = alerts.length > 0 || !!banners;
+  // Dev only: ?wx=rain&night=1 previews the hero for any condition
+  const preview = process.env.NODE_ENV === 'development' && typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const heroCode = (preview?.get('wx') as Cond | null) ?? n.icon;
+  const heroNight = preview?.has('night') ? preview.get('night') === '1' : !n.isDay;
 
   return (
     <div className={`now${hasBanners ? ' has-banners' : ''}`}>
@@ -265,6 +271,7 @@ export default function NowPage({ data, banners, now }: { data: ForecastResponse
       )}
 
       <div className="tile hero">
+        <HeroSky code={heroCode} night={heroNight} />
         <div className="hero-row">
           <div>
             <div className="label">Right now</div>
@@ -272,7 +279,7 @@ export default function NowPage({ data, banners, now }: { data: ForecastResponse
               {n.temp ?? '--'}<sup>°F</sup>
             </div>
           </div>
-          <WxIcon code={n.icon} night={!n.isDay} className="hero-ico" />
+          <HeroIcon code={heroCode} night={heroNight} />
         </div>
         <div className="cond">{n.condition}</div>
         <div className="hero-meta">
