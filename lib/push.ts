@@ -3,6 +3,8 @@
  * identity, and its `auth` secret is the credential for changing it.
  * VAPID keys come from .env.local (FAIRWEATHER_VAPID_*).
  */
+import { createHash } from 'node:crypto';
+
 import webpush, { type WebPushError } from 'web-push';
 
 import { fwDb, type SubRow } from './db';
@@ -162,6 +164,12 @@ export interface SendOpts {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Topic header for a tag. Apple decodes it as base64url and rejects lengths that can't be base64
+ * (BadWebPushTopic, e.g. "brief"), so hash the tag to a fixed 32-character base64url string.
+ */
+const topicFor = (tag?: string) => (tag ? createHash('sha256').update(tag).digest('base64url').slice(0, 32) : undefined);
+
 function encode(p: PushPayload): string {
   const body = p.body.length > 400 ? `${p.body.slice(0, 397)}...` : p.body;
   return JSON.stringify({ ...p, body }).slice(0, 3000);
@@ -175,16 +183,18 @@ export async function sendPush(sub: SubRow, payload: PushPayload, opts: SendOpts
   const send = () => webpush.sendNotification(
     { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
     data,
-    { TTL: opts.ttl ?? 3600, urgency: opts.urgency ?? 'normal', topic: payload.tag?.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || undefined },
+    { TTL: opts.ttl ?? 3600, urgency: opts.urgency ?? 'normal', topic: topicFor(payload.tag) },
   );
 
   let status = 0;
+  let reason = '';
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       status = (await send()).statusCode;
     } catch (e) {
       const err = e as WebPushError;
       status = err.statusCode ?? 0;
+      reason = String(err.body ?? '').slice(0, 200);
       if ((status === 429 || status >= 500) && attempt === 0) {
         const ra = Number(err.headers?.['retry-after']);
         await sleep(Math.min(60, Number.isFinite(ra) && ra > 0 ? ra : 5) * 1000);
@@ -200,7 +210,7 @@ export async function sendPush(sub: SubRow, payload: PushPayload, opts: SendOpts
   } else if (status === 404 || status === 410) {
     deleteSub(sub.id);
   } else if (status === 400 || status === 413) {
-    console.warn(`[fairweather] push rejected payload (${status}), ${data.length} bytes, tag=${payload.tag ?? ''}`);
+    console.warn(`[fairweather] push rejected (${status}) ${reason}, ${data.length} bytes, tag=${payload.tag ?? ''}`);
   } else {
     db.prepare('UPDATE subscriptions SET fail_count = fail_count + 1, first_fail_at = COALESCE(first_fail_at, ?) WHERE id = ?').run(now, sub.id);
   }
