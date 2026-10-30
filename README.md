@@ -12,7 +12,7 @@ Service forecasts). Elsewhere it falls back to model-only forecasts, without sta
 or radar.
 
 <p align="center">
-  <img src="docs/screenshots/fairweather-screens.png" alt="Fairweather on iPhone: Now, Hourly, 10-Day, Radar, and the theme picker">
+  <img src="docs/screenshots/fairweather-screens.png" alt="Fairweather on iPhone: Now in dark mode, Hourly, 10-Day, Radar, and Now in light mode">
 </p>
 
 ## Features
