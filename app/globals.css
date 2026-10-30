@@ -400,6 +400,29 @@ body {
 .legend .ramp { flex: 1; height: 8px; border-radius: 99px; }
 .legend .sw { display: flex; align-items: center; gap: 4px; }
 .legend .sw i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+/* Warnings and watches: toggle, and the popout anchored where a shape is tapped */
+.seg-set { display: contents; }
+.wwa-btn { display: inline-flex; align-items: center; gap: 7px; }
+.wwa-btn i { width: 12px; height: 10px; border-radius: 2px; border: 2px solid #ff2a2a; background: rgba(255, 165, 0, .35); outline: 1.5px dashed #ffe000; outline-offset: 1px; }
+.wwa-btn[aria-pressed="false"] i { opacity: .45; }
+.wwa-pop { z-index: 4; }
+.wwa-pop .mapboxgl-popup-content { padding: 0; background: var(--fw-surface); color: var(--fw-ink); border: 1px solid var(--fw-line); border-radius: 14px; box-shadow: var(--fw-shadow); font-family: var(--f-body); }
+.wwa-pop.mapboxgl-popup-anchor-top .mapboxgl-popup-tip, .wwa-pop.mapboxgl-popup-anchor-top-left .mapboxgl-popup-tip, .wwa-pop.mapboxgl-popup-anchor-top-right .mapboxgl-popup-tip { border-bottom-color: var(--fw-surface); }
+.wwa-pop.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip, .wwa-pop.mapboxgl-popup-anchor-bottom-left .mapboxgl-popup-tip, .wwa-pop.mapboxgl-popup-anchor-bottom-right .mapboxgl-popup-tip { border-top-color: var(--fw-surface); }
+.wwa-pop.mapboxgl-popup-anchor-left .mapboxgl-popup-tip { border-right-color: var(--fw-surface); }
+.wwa-pop.mapboxgl-popup-anchor-right .mapboxgl-popup-tip { border-left-color: var(--fw-surface); }
+.wwa-card { position: relative; width: min(320px, calc(100vw - 48px)); }
+.wwa-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--fw-surface-2); color: var(--fw-muted); z-index: 1; }
+.wwa-body { max-height: min(40vh, 340px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.wwa-item { padding: 12px 14px 12px 16px; border-left: 4px solid var(--wwa); display: flex; flex-direction: column; gap: 4px; }
+.wwa-item + .wwa-item { border-top: 1px solid var(--fw-line); }
+.wwa-item h3 { margin: 0; padding-right: 30px; font-size: 15px; font-weight: 700; line-height: 1.25; }
+.wwa-sub { font-family: var(--f-mono); font-size: 11px; color: var(--fw-muted); }
+.wwa-msg { margin: 4px 0 0; font-size: 13px; color: var(--fw-muted); }
+.wwa-text { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; font-size: 13px; line-height: 1.45; }
+.wwa-text p { margin: 0; text-wrap: pretty; }
+.wwa-text b { font-size: 13px; }
+.wwa-text .wwa-area { color: var(--fw-muted); font-size: 12px; }
 .radar-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--fw-muted); }
 .fw-pin-label { font-family: var(--f-body); }
 

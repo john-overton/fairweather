@@ -5,13 +5,14 @@
  *   alerts   every 2 min   NWS alerts for every saved zone → push
  *   rain     every 15 min  "Rain soon" + morning brief
  *   cleanup  daily 3:17    prune dead/abandoned subscriptions and old rows
- *   radar    every 5 min   prewarm the radar tile cache, prune old frames
+ *   radar    every 5 min   prewarm the radar tile cache and warning outlines, prune old frames
  */
 import { fwDb, type SubLocationRow, type SubPrefsRow, type SubRow } from './db';
 import { alertLevel, buildForecast } from './forecast';
 import { deliverOnce, fanOut, inQuietHours, localMinutes, toMin, type PushPayload } from './push';
 import { prewarmRadar, pruneRadarTiles } from './radar';
 import { nwsAlertsZones, omMinutely, type NwsAlertProps } from './sources';
+import { radarAlerts } from './wwa';
 
 const LEVEL_RANK: Record<string, number> = { statement: 0, advisory: 1, watch: 2, warning: 3 };
 const HOUR = 3600_000;
@@ -221,5 +222,6 @@ export async function runRadar() {
   const points = [DEFAULT_POINT, ...rows.filter((r) => Math.abs(r.lat - DEFAULT_POINT.lat) > 0.5 || Math.abs(r.lon - DEFAULT_POINT.lon) > 0.5)];
   const warm = await prewarmRadar(points);
   const prune = await pruneRadarTiles();
-  return { ...warm, ...prune };
+  const wwa = await radarAlerts().then((c) => c.features.length, () => null);
+  return { ...warm, ...prune, wwa };
 }

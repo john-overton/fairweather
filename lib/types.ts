@@ -90,6 +90,17 @@ export interface DayData {
 
 export type AlertLevel = 'warning' | 'watch' | 'advisory' | 'statement';
 
+/** A warning or watch outline on the radar map. The text is fetched separately when tapped. */
+export interface WwaProps {
+  id: string;
+  event: string;
+  level: 'warning' | 'watch';
+  color: string;
+  /** Draw and list order: tornado warnings highest */
+  rank: number;
+  ends: string | null;
+}
+
 export interface WxAlert {
   id: string;
   event: string;

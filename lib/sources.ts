@@ -2,6 +2,8 @@
  * Upstream fetchers for Fairweather: NWS, Open-Meteo, AirNow, and IEM.
  * Server-side only — NWS requires a User-Agent with contact info.
  */
+import type * as GeoJSON from 'geojson';
+
 import { distanceKm } from './conditions';
 import type { RadarSite } from './types';
 
@@ -237,8 +239,9 @@ export const nwsLatestObs = (station: string) =>
 
 interface AlertsJson {
   features: {
+    geometry: GeoJSON.Geometry | null;
     properties: {
-      id: string; event: string; headline: string | null; description: string; instruction: string | null;
+      id: string; event: string; headline: string | null; description: string; instruction: string | null; areaDesc: string;
       severity: string; messageType: string; sent: string; expires: string | null; ends: string | null;
       senderName: string; parameters?: { AWIPSidentifier?: string[] }; geocode?: { UGC?: string[] };
       affectedZones?: string[]; references?: { identifier: string }[];
@@ -246,6 +249,7 @@ interface AlertsJson {
   }[];
 }
 export type NwsAlertProps = AlertsJson['features'][number]['properties'];
+export type NwsAlertFeature = AlertsJson['features'][number];
 
 export const nwsAlertsPoint = (lat: number, lon: number) =>
   cached(`alerts:${lat.toFixed(3)},${lon.toFixed(3)}`, 2 * 60_000, async () =>
@@ -254,6 +258,20 @@ export const nwsAlertsPoint = (lat: number, lon: number) =>
 /** Active alerts for up to 25 zones at a time (cron fan-out). */
 export const nwsAlertsZones = async (zones: string[]) =>
   (await nwsGet<AlertsJson>(`/alerts/active?zone=${zones.join(',')}`)).features.map((f) => f.properties);
+
+/** Every active alert nationwide (1–2 MB, full text); feeds the radar overlay. Cached 1 min. */
+export const nwsAlertsActive = () =>
+  cached('alerts:all', 60_000, async () => (await nwsGet<AlertsJson>('/alerts/active?status=actual')).features);
+
+/** One alert with its full text, by id (`urn:oid:...`). Cached 5 min. */
+export const nwsAlert = (id: string) =>
+  cached(`alert:${id}`, 5 * 60_000, async () => (await nwsGet<{ properties: NwsAlertProps }>(`/alerts/${encodeURIComponent(id)}`)).properties);
+
+/** A forecast zone or county outline, from an alert's `affectedZones` URL. */
+export async function nwsZoneGeometry(url: string): Promise<GeoJSON.Geometry | null> {
+  if (!url.startsWith(`${NWS}/zones/`)) throw new Error(`Unexpected zone URL: ${url}`);
+  return (await nwsGet<{ geometry: GeoJSON.Geometry | null }>(url)).geometry;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Open-Meteo                                                         */

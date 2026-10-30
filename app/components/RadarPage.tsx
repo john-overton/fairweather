@@ -4,14 +4,15 @@ import type * as GeoJSON from 'geojson';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { HRRR_BOUNDS, type LngLatBox, type RadarLayer as LayerId, type Win, buildFrames, frameTileLayer } from '@/lib/radarFrames';
-import type { RadarManifest, RadarSite, SavedLocation } from '@/lib/types';
+import type { RadarManifest, RadarSite, SavedLocation, WwaProps, WxAlert } from '@/lib/types';
 
 import { api } from '../lib/base';
-import { fmtDayTimeTz, fmtDuration } from '../lib/format';
+import { fmtDayTimeTz, fmtDuration, unwrap } from '../lib/format';
 import { store } from '../lib/store';
-import { PauseIcon, PlayIcon, ReplayIcon, TargetIcon } from './Icons';
+import { CloseIcon, PauseIcon, PlayIcon, ReplayIcon, TargetIcon } from './Icons';
 
 /* ------------------------------------------------------------------ */
 /*  Config                                                             */
@@ -57,10 +58,64 @@ function ringPolygon(lat: number, lon: number, km: number): GeoJSON.Feature<GeoJ
   return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } };
 }
 
+function firstSymbolLayer(map: mapboxgl.Map): string | undefined {
+  return (map.getStyle()?.layers ?? []).find((l) => l.type === 'symbol')?.id;
+}
+
 function firstRoadLayer(map: mapboxgl.Map): string | undefined {
   const layers = map.getStyle()?.layers ?? [];
   return (layers.find((l) => /^(tunnel|road|bridge)/.test(l.id) || (l as { 'source-layer'?: string })['source-layer'] === 'road')
     ?? layers.find((l) => l.type === 'symbol'))?.id;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Warning and watch popout                                           */
+/* ------------------------------------------------------------------ */
+
+const WWA_LAYERS = ['fw-wwa-fill', 'fw-wwa-casing', 'fw-wwa-warn', 'fw-wwa-watch'];
+type WwaDetail = WxAlert & { areaDesc: string };
+/** Alert text, fetched the first time its shape is tapped */
+const details = new Map<string, Promise<WwaDetail>>();
+
+function loadDetail(id: string): Promise<WwaDetail> {
+  let p = details.get(id);
+  if (!p) {
+    p = fetch(api(`alerts/detail?id=${encodeURIComponent(id)}`)).then(async (r) => {
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? `Error ${r.status}`);
+      return j.alert as WwaDetail;
+    });
+    p.catch(() => details.delete(id));
+    details.set(id, p);
+  }
+  return p;
+}
+
+function WwaItem({ a, tz }: { a: WwaProps; tz: string }) {
+  const [d, setD] = useState<WwaDetail | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    loadDetail(a.id).then((x) => live && setD(x), (e: Error) => live && setErr(e.message));
+    return () => { live = false; };
+  }, [a.id]);
+  const until = d?.ends ?? d?.expires ?? a.ends;
+  return (
+    <section className="wwa-item" style={{ '--wwa': a.color } as React.CSSProperties}>
+      <h3>{a.event}</h3>
+      <div className="wwa-sub">
+        {until ? `Until ${fmtDayTimeTz(until, tz)}` : ''}{d ? ` · ${d.office ? `NWS ${d.office}` : d.senderName}` : ''}
+      </div>
+      {err ? <p className="wwa-msg">{err}</p> : !d ? <p className="wwa-msg">Loading details…</p> : (
+        <div className="wwa-text">
+          {d.headline && <b>{d.headline}</b>}
+          {d.areaDesc && <p className="wwa-area">{d.areaDesc}</p>}
+          {unwrap(d.description).map((t, i) => <p key={i}>{t}</p>)}
+          {d.instruction && unwrap(d.instruction).map((t, i) => <p key={`i${i}`}>{t}</p>)}
+        </div>
+      )}
+    </section>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -99,6 +154,9 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
   const [loaded, setLoaded] = useState(0);
   const [clock, setClock] = useState(() => Date.now());
   const [view, setView] = useState<LngLatBox | null>(null);
+  const [showWwa, setShowWwa] = useState<boolean>(() => store.get('wx.wwa', true));
+  const [wwa, setWwa] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [pop, setPop] = useState<{ at: [number, number]; items: WwaProps[] } | null>(null);
 
   /* ---- Manifest: fetch on open and every 2 min while visible ---- */
   useEffect(() => {
@@ -118,6 +176,21 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
     const t = setInterval(load, 2 * MIN);
     return () => { stop = true; clearInterval(t); };
   }, [active]);
+
+  /* ---- Warning and watch outlines: shapes only, every 2 min while visible ---- */
+  useEffect(() => {
+    if (!active || !showWwa) return;
+    let stop = false;
+    const load = async () => {
+      try {
+        const r = await fetch(api('radar/alerts'));
+        if (r.ok && !stop) setWwa(await r.json());
+      } catch { /* keep the last outlines */ }
+    };
+    load();
+    const t = setInterval(load, 2 * MIN);
+    return () => { stop = true; clearInterval(t); };
+  }, [active, showWwa]);
 
   const { frames, nowIdx } = useMemo(
     () => buildFrames(manifestError ? null : manifest, manifestError ? 2 : win, future && !manifestError, clock),
@@ -172,6 +245,20 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
     };
     map.on('moveend', track);
     map.on('load', track);
+    // Tapping a warning or watch opens its popout; tapping elsewhere closes it
+    map.on('click', (e) => {
+      const layers = ['fw-wwa-fill'].filter((id) => map.getLayer(id) && map.getLayoutProperty(id, 'visibility') !== 'none');
+      const pad = 6;
+      const hits = layers.length ? map.queryRenderedFeatures([[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers }) : [];
+      const seen = new Set<string>();
+      const items = hits.map((f) => f.properties as WwaProps).filter((p) => !seen.has(p.id) && seen.add(p.id))
+        .sort((a, b) => b.rank - a.rank).slice(0, 4);
+      setPop(items.length ? { at: [e.lngLat.lng, e.lngLat.lat], items } : null);
+    });
+    map.on('mousemove', (e) => {
+      const hit = map.getLayer('fw-wwa-fill') && map.queryRenderedFeatures(e.point, { layers: ['fw-wwa-fill'] }).length;
+      map.getCanvas().style.cursor = hit ? 'pointer' : '';
+    });
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -318,6 +405,59 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
     }
   }, [locations, locIdx, radarSite, accent, basemap, styleVersion]);
 
+  /* ---- Warning and watch outlines, above the radar and below place labels ---- */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady.current) return;
+    const data = wwa ?? { type: 'FeatureCollection', features: [] };
+    const src = map.getSource('fw-wwa') as mapboxgl.GeoJSONSource | undefined;
+    if (src) src.setData(data); else map.addSource('fw-wwa', { type: 'geojson', data });
+    if (!map.getLayer('fw-wwa-fill')) {
+      const before = firstSymbolLayer(map);
+      const isWarn: mapboxgl.ExpressionSpecification = ['==', ['get', 'level'], 'warning'];
+      map.addLayer({
+        id: 'fw-wwa-fill', type: 'fill', source: 'fw-wwa',
+        layout: { 'fill-sort-key': ['get', 'rank'] },
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['case', isWarn, 0.18, 0.1] },
+      }, before);
+      map.addLayer({
+        id: 'fw-wwa-casing', type: 'line', source: 'fw-wwa', filter: isWarn,
+        layout: { 'line-sort-key': ['get', 'rank'], 'line-join': 'round' },
+        paint: { 'line-color': BASEMAP_UI[basemap].halo, 'line-width': 4.5, 'line-opacity': 0.7 },
+      }, before);
+      map.addLayer({
+        id: 'fw-wwa-warn', type: 'line', source: 'fw-wwa', filter: isWarn,
+        layout: { 'line-sort-key': ['get', 'rank'], 'line-join': 'round' },
+        paint: { 'line-color': ['get', 'color'], 'line-width': 2.5 },
+      }, before);
+      // Watches: thinner and dashed, so warnings inside them stand out
+      map.addLayer({
+        id: 'fw-wwa-watch', type: 'line', source: 'fw-wwa', filter: ['==', ['get', 'level'], 'watch'],
+        layout: { 'line-sort-key': ['get', 'rank'], 'line-join': 'round' },
+        paint: { 'line-color': ['get', 'color'], 'line-width': 1.8, 'line-dasharray': [3, 2] },
+      }, before);
+    } else {
+      map.setPaintProperty('fw-wwa-casing', 'line-color', BASEMAP_UI[basemap].halo);
+    }
+    for (const id of WWA_LAYERS) map.setLayoutProperty(id, 'visibility', showWwa ? 'visible' : 'none');
+  }, [wwa, showWwa, basemap, styleVersion]);
+
+  useEffect(() => { if (!showWwa || !active) setPop(null); }, [showWwa, active]);
+
+  // The popout is a Mapbox popup anchored at the tap; React renders into its DOM node
+  const popNode = useMemo(() => (typeof document === 'undefined' ? null : document.createElement('div')), []);
+  const popupRef = useRef<mapboxgl.Popup | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !popNode) return;
+    if (!pop) { popupRef.current?.remove(); return; }
+    if (!popupRef.current) {
+      popupRef.current = new mapboxgl.Popup({ className: 'wwa-pop', closeButton: false, closeOnClick: false, maxWidth: '340px', offset: 10, focusAfterOpen: false })
+        .setDOMContent(popNode);
+    }
+    popupRef.current.setLngLat(pop.at).addTo(map);
+  }, [pop, popNode]);
+
   /* ---- Loop ---- */
   const idxRef = useRef(idx);
   idxRef.current = idx;
@@ -402,11 +542,28 @@ export default function RadarPage({ active, location, locations, locIdx, radarSi
         <div className="tl-load" aria-hidden="true"><i style={{ width: `${(loaded / Math.max(1, frames.length)) * 100}%` }} /></div>
       )}
 
-      <div className="ov layers" role="group" aria-label="Radar layer">
-        {LAYERS.map((l) => (
-          <button key={l.id} className="seg glass" aria-pressed={layer === l.id} onClick={() => setLayer(l.id)}>{l.name}</button>
-        ))}
+      <div className="ov layers">
+        <div className="seg-set" role="group" aria-label="Radar layer">
+          {LAYERS.map((l) => (
+            <button key={l.id} className="seg glass" aria-pressed={layer === l.id} onClick={() => setLayer(l.id)}>{l.name}</button>
+          ))}
+        </div>
+        <button
+          className="seg glass wwa-btn" aria-pressed={showWwa} aria-label="Show warnings and watches"
+          onClick={() => { const v = !showWwa; setShowWwa(v); store.set('wx.wwa', v); }}
+        >
+          <i aria-hidden="true" />Alerts
+        </button>
       </div>
+      {pop && popNode && createPortal(
+        <div className="wwa-card" role="dialog" aria-label="Warnings and watches here">
+          <button className="wwa-close" aria-label="Close" onClick={() => setPop(null)}><CloseIcon size={14} /></button>
+          <div className="wwa-body">
+            {pop.items.map((a) => <WwaItem key={a.id} a={a} tz={tz} />)}
+          </div>
+        </div>,
+        popNode,
+      )}
       <div className="ov basemaps glass" role="group" aria-label="Map style">
         {(['night', 'day'] as const).map((b) => (
           <button key={b} className="bm" aria-pressed={basemap === b} style={{ background: BASEMAP_UI[b].swatch }} aria-label={`${b === 'night' ? 'Night' : 'Day'} map`} onClick={() => setBasemap(b)}>
