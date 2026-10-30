@@ -2,7 +2,9 @@
 
 Fairweather is a Next.js app that runs as a Node service on `127.0.0.1:3100`, behind nginx at the
 `/fairweather` path of an existing site. A crontab drives alerts, rain-soon notifications, and the
-radar tile cache. State lives in `data/` (SQLite for push subscriptions, and the tile cache).
+radar tile cache. State lives in `data/` (SQLite for push subscriptions, and NWS zone outlines for the
+radar's warnings). Radar tiles are cached in `/var/cache/fairweather/tiles` (`FAIRWEATHER_TILE_DIR`,
+set in the service unit), outside the app so builds don't have to scan them.
 
 The paths below assume the app lives at `/var/www/fairweather` and runs as `www-data`. Adjust
 `deploy/fairweather.service` if yours differ.

@@ -86,8 +86,8 @@ Everything is served under `basePath: '/fairweather'` (`next.config.ts`). `fetch
 
 Server responses are cached in memory (forecast 10 min, points 24 h, alerts 2 min).
 
-Radar tiles go through `/fairweather/api/radar/tile/...`, which stores each tile on disk (`data/tiles`)
-and serves it as immutable. The `radar` cron job pre-fetches the default 2 h loop and the first 6 h of
+Radar tiles go through `/fairweather/api/radar/tile/...`, which stores each tile on disk (`data/tiles`,
+or `FAIRWEATHER_TILE_DIR`; production uses `/var/cache/fairweather/tiles`) and serves it as immutable. The `radar` cron job pre-fetches the default 2 h loop and the first 6 h of
 forecast around Kansas City and subscribers' saved places, and prunes frames older than 25 h and all
 but the newest two HRRR runs. The Radar page adds frames to the map a few at a time, Now first.
 

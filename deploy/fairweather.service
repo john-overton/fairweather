@@ -18,6 +18,10 @@ WorkingDirectory=/var/www/fairweather
 ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -p 3100 -H 127.0.0.1
 Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1
+# Radar tiles live outside the app folder so `next build` doesn't scan tens of thousands of PNGs.
+# CacheDirectory creates /var/cache/fairweather, owned by User and writable under ProtectSystem.
+CacheDirectory=fairweather
+Environment=FAIRWEATHER_TILE_DIR=/var/cache/fairweather/tiles
 Restart=on-failure
 RestartSec=3
 # hardening
@@ -25,7 +29,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-# SQLite database, radar tile cache, and Next's runtime cache
+# SQLite database, NWS zone outlines, and Next's runtime cache
 ReadWritePaths=/var/www/fairweather/data /var/www/fairweather/.next
 
 [Install]
