@@ -1,12 +1,15 @@
 /**
- * Fairweather scheduled jobs. Triggered by the server's crontab via
- * scripts/cron.sh → POST /fairweather/api/cron/{job}.
+ * Fairweather scheduled jobs. Run in-process by server/jobs.ts on the schedules in lib/config.ts
+ * (FAIRWEATHER_SCHEDULE_*), or once from the command line with server/job.ts (`npm run job <name>`).
  *
  *   alerts   every 2 min   NWS alerts for every saved zone → push
  *   rain     every 15 min  "Rain soon" + morning brief
  *   cleanup  daily 3:17    prune dead/abandoned subscriptions and old rows
  *   radar    every 5 min   prewarm the radar tile cache and warning outlines, prune old frames
+ *
+ * Each returns a small JSON-able summary, which the scheduler logs.
  */
+import { config } from './config';
 import { fwDb, type SubLocationRow, type SubPrefsRow, type SubRow } from './db';
 import { alertLevel, buildForecast } from './forecast';
 import { deliverOnce, fanOut, inQuietHours, localMinutes, toMin, type PushPayload } from './push';
@@ -198,28 +201,29 @@ export function runCleanup() {
     return ids.length;
   };
 
+  const { retain } = config;
+
+  // Dead: failing for a week (10+ sends). Abandoned: app not opened in retain.inactiveSubs days and nothing delivered
+  // in 30, so someone who only reads the notifications (and never opens the app) is kept.
   const dead = delSubs(db.prepare('SELECT id FROM subscriptions WHERE fail_count >= 10 AND first_fail_at < ?').all(iso(7 * DAY)) as { id: number }[]);
   const abandoned = delSubs(db.prepare(
     'SELECT id FROM subscriptions WHERE last_seen_at < ? AND (last_success_at IS NULL OR last_success_at < ?)',
-  ).all(iso(120 * DAY), iso(30 * DAY)) as { id: number }[]);
-  const alertsPruned = db.prepare('DELETE FROM alerts_seen WHERE expires_at < ?').run(iso(7 * DAY)).changes;
-  const deliveriesPruned = db.prepare('DELETE FROM deliveries WHERE sent_at < ?').run(iso(30 * DAY)).changes;
+  ).all(iso(retain.inactiveSubs * DAY), iso(30 * DAY)) as { id: number }[]);
+  const alertsPruned = db.prepare('DELETE FROM alerts_seen WHERE expires_at < ?').run(iso(retain.alerts * DAY)).changes;
+  const deliveriesPruned = db.prepare('DELETE FROM deliveries WHERE sent_at < ?').run(iso(retain.deliveries * DAY)).changes;
 
-  const counts = { dead, abandoned, alertsPruned, deliveriesPruned };
-  console.log('[fairweather] cleanup', counts);
-  return counts;
+  return { dead, abandoned, alertsPruned, deliveriesPruned };
 }
 
 /* ------------------------------------------------------------------ */
 /*  Radar tile cache                                                   */
 /* ------------------------------------------------------------------ */
 
-const DEFAULT_POINT = { lat: 39.0997, lon: -94.5786 }; // Kansas City, the app's default location
-
 export async function runRadar() {
-  // Kansas City plus every subscriber's saved places (rounded to ~10 km, capped) so their first look is instant
+  // The default location plus every subscriber's saved places (rounded to ~10 km, capped) so their first look is instant
+  const home = config.defaults.location;
   const rows = fwDb().prepare('SELECT DISTINCT ROUND(lat, 1) AS lat, ROUND(lon, 1) AS lon FROM sub_locations LIMIT 20').all() as { lat: number; lon: number }[];
-  const points = [DEFAULT_POINT, ...rows.filter((r) => Math.abs(r.lat - DEFAULT_POINT.lat) > 0.5 || Math.abs(r.lon - DEFAULT_POINT.lon) > 0.5)];
+  const points = [home, ...rows.filter((r) => Math.abs(r.lat - home.lat) > 0.5 || Math.abs(r.lon - home.lon) > 0.5)];
   const warm = await prewarmRadar(points);
   const prune = await pruneRadarTiles();
   const wwa = await radarAlerts().then((c) => c.features.length, () => null);

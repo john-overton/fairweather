@@ -1,10 +1,10 @@
 /* Fairweather service worker. Served at /fairweather/sw.js, scope /fairweather
    - App shell: network-first navigation with cached fallback
-   - Next static assets (incl. self-hosted fonts): cache-first (immutable)
-   - Forecast API: network-first, last response per location kept for offline
+   - Vite build output in /assets/ (hashed JS/CSS and self-hosted fonts): cache-first (immutable)
+   - Forecast and config API: network-first, last response kept for offline
    - Web Push: show, click-through, and subscription rotation */
 const BASE = '/fairweather';
-const VERSION = 'fw-v1';
+const VERSION = 'fw-v2';
 const SHELL = `${VERSION}-shell`;
 const ASSETS = `${VERSION}-assets`;
 const DATA = `${VERSION}-data`;
@@ -58,11 +58,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(networkFirst(req, SHELL, BASE));
     return;
   }
-  if (url.origin === self.location.origin && url.pathname.startsWith(`${BASE}/_next/static/`)) {
+  if (url.origin === self.location.origin && url.pathname.startsWith(`${BASE}/assets/`)) {
     event.respondWith(cacheFirst(req));
     return;
   }
-  if (url.origin === self.location.origin && url.pathname === `${BASE}/api/forecast`) {
+  if (url.origin === self.location.origin && [`${BASE}/api/forecast`, `${BASE}/api/config`].includes(url.pathname)) {
     event.respondWith(networkFirst(req, DATA));
   }
 });

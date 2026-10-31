@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server';
-
 /* In-memory fixed-window rate limiter (single server process). */
 const hits = new Map<string, { n: number; reset: number }>();
 
@@ -19,7 +17,7 @@ export function clientIp(req: Request): string {
   return req.headers.get('x-forwarded-for')?.split(',')[0].trim() || req.headers.get('x-real-ip') || 'local';
 }
 
-export const jsonError = (status: number, error: string) => NextResponse.json({ error }, { status });
+export const jsonError = (status: number, error: string) => Response.json({ error }, { status });
 
 /** Parse ?lat=&lon=, rounded to 2 decimals (the cache key), limited to the US. */
 export function parseLatLon(url: URL): { lat: number; lon: number } | null {

@@ -1,6 +1,6 @@
 /**
  * Warnings and watches for the radar map: outlines only, nationwide. The text stays on NWS until
- * someone taps a shape (app/api/alerts/detail).
+ * someone taps a shape (/api/alerts/detail).
  *
  * Storm-based warnings (tornado, severe thunderstorm, flash flood, ...) carry their own polygon.
  * Everything else is drawn from its forecast zones and counties; those outlines rarely change, so
@@ -15,7 +15,7 @@ import { alertLevel } from './forecast';
 import { cached, nwsAlertsActive, nwsZoneGeometry, type NwsAlertFeature } from './sources';
 import type { WwaProps } from './types';
 
-const ZONE_DIR = process.env.FAIRWEATHER_ZONE_DIR || path.join(/* turbopackIgnore: true */ process.cwd(), 'data', 'zones');
+const ZONE_DIR = process.env.FAIRWEATHER_ZONE_DIR || path.join(process.cwd(), 'data', 'zones');
 /** Marine zone UGC prefixes (coastal waters, Great Lakes, offshore) */
 const MARINE = /^(AM|AN|GM|LC|LE|LH|LM|LO|LS|PH|PK|PM|PS|PZ|SL)Z\d{3}$/;
 /** Zone outlines are simplified to about 1 km (fine at radar zooms); storm-based polygons are already simple */

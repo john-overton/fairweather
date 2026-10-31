@@ -8,7 +8,6 @@
  * (~1 s of CPU for CONUS) runs in a worker thread, lib/workers/mrms-decode.mjs, so the server keeps
  * answering requests meanwhile. Tile drawing (1 to 2 ms) stays here.
  */
-import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 
 import { encodeRGBA } from './png';
@@ -75,8 +74,11 @@ export async function latestPtypeTime(): Promise<number> {
 /*  Decode worker                                                      */
 /* ------------------------------------------------------------------ */
 
-// Loaded from disk rather than bundled; the service runs from the app directory
-const WORKER_PATH = path.join(/* turbopackIgnore: true */ process.cwd(), 'lib', 'workers', 'mrms-decode.mjs');
+/**
+ * Resolved next to this module: lib/workers/ under tsx, dist/server/workers/ in the bundle (scripts/build-server.mjs
+ * builds it there as its own entry point), so neither depends on the working directory.
+ */
+const WORKER_URL = new URL('./workers/mrms-decode.mjs', import.meta.url);
 let worker: Worker | null = null;
 let seq = 0;
 const pending = new Map<number, { resolve: (g: FrameGrid) => void; reject: (e: Error) => void }>();
@@ -89,26 +91,38 @@ function failAll(err: Error) {
 
 function decodeWorker(): Worker {
   if (worker) return worker;
-  const w = new Worker(WORKER_PATH);
+  const w = new Worker(WORKER_URL);
   w.on('message', (m: { id: number; grid?: FrameGrid; error?: string }) => {
     const p = pending.get(m.id);
     if (!p) return;
     pending.delete(m.id);
+    if (!pending.size) w.unref();
     if (m.grid) p.resolve(m.grid);
     else p.reject(new Error(m.error ?? 'decode failed'));
   });
   w.on('error', (e) => failAll(e));
   w.on('exit', (code) => { if (worker === w) failAll(new Error(`MRMS worker exited (${code})`)); });
-  w.unref(); // never keeps the process alive on its own
+  // Holds the process open only while a decode is pending (so `npm run job radar` waits for it), never when idle
+  w.unref();
   worker = w;
   return w;
+}
+
+/** Shutdown: end the decode thread (pending decodes reject, their frames simply aren't cached). */
+export async function stopMrmsWorker() {
+  const w = worker;
+  if (!w) return;
+  failAll(new Error('MRMS worker stopped'));
+  await w.terminate();
 }
 
 function decodeInWorker(flagKey: string, refKey: string): Promise<FrameGrid> {
   return new Promise((resolve, reject) => {
     const id = ++seq;
     pending.set(id, { resolve, reject });
-    decodeWorker().postMessage({ id, flagUrl: `${BUCKET}/${flagKey}`, refUrl: `${BUCKET}/${refKey}` });
+    const w = decodeWorker();
+    w.ref();
+    w.postMessage({ id, flagUrl: `${BUCKET}/${flagKey}`, refUrl: `${BUCKET}/${refKey}` });
   });
 }
 

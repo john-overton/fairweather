@@ -184,3 +184,8 @@ export interface PushPrefs {
   quietStart: string;
   quietEnd: string;
 }
+
+/** GET /api/config: server-side defaults (lib/config.ts) the browser starts from */
+export interface ClientConfig {
+  defaults: { location: SavedLocation; prefs: PushPrefs };
+}

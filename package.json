@@ -4,36 +4,54 @@
   "private": true,
   "description": "Personal, ad-free, no-login weather PWA: NWS forecasts and observations, radar with HRRR forecast, push alerts",
   "scripts": {
-    "dev": "next dev -p 3100",
-    "build": "next build",
-    "start": "next start -p 3100 -H 127.0.0.1",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite",
+    "dev:server": "tsx watch --clear-screen=false server/index.ts",
+    "build": "vite build && node scripts/build-server.mjs",
+    "start": "node --enable-source-maps dist/server/index.mjs",
+    "job": "node --enable-source-maps dist/server/job.mjs",
+    "job:dev": "tsx server/job.ts",
     "typecheck": "tsc --noEmit",
     "contrast": "node scripts/contrast.mjs"
   },
   "engines": {
-    "node": ">=20 <26"
+    "node": ">=22.18 <26"
   },
   "dependencies": {
+    "@hono/node-server": "2.1.4",
     "better-sqlite3": "^12.6.2",
-    "mapbox-gl": "^3.18.1",
-    "next": "^16.0.7",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "croner": "10.0.1",
+    "hono": "4.13.13",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@fontsource-variable/big-shoulders": "5.3.0",
+    "@fontsource-variable/public-sans": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/geojson": "^7946.0.16",
-    "@types/node": "^20",
+    "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
-    "typescript": "^5"
+    "@vitejs/plugin-react": "6.1.2",
+    "esbuild": "0.28.2",
+    "mapbox-gl": "^3.18.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "tsx": "4.23.15",
+    "typescript": "^5",
+    "vite": "8.3.4"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/john-overton/fairweather.git"
   },
-  "homepage": "https://openglades.com/fairweather"
+  "homepage": "https://openglades.com/fairweather",
+  "type": "module",
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.28.2": true
+  }
 }

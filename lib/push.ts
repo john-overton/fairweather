@@ -1,12 +1,13 @@
 /**
  * Web Push for Fairweather. No accounts: each browser's push subscription is its
  * identity, and its `auth` secret is the credential for changing it.
- * VAPID keys come from .env.local (FAIRWEATHER_VAPID_*).
+ * VAPID keys come from the environment (FAIRWEATHER_VAPID_*, usually .env.local).
  */
 import { createHash } from 'node:crypto';
 
 import webpush, { type WebPushError } from 'web-push';
 
+import { config } from './config';
 import { fwDb, type SubRow } from './db';
 import { nwsPoint } from './sources';
 import type { AlertMin, PushPrefs, SavedLocation } from './types';
@@ -43,14 +44,17 @@ export function isKnownPushEndpoint(endpoint: string): boolean {
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const ALERT_MINS: AlertMin[] = ['advisory', 'watch', 'warning'];
+const hhmm = (v: unknown): v is string => typeof v === 'string' && HHMM.test(v);
 
+/** Missing or malformed fields take the server defaults (config.defaults.prefs); `briefTime: null` means off. */
 export function cleanPrefs(p: Partial<PushPrefs> | undefined): PushPrefs {
+  const d = config.defaults.prefs;
   return {
-    alertMin: ALERT_MINS.includes(p?.alertMin as AlertMin) ? (p!.alertMin as AlertMin) : 'watch',
-    rainSoon: p?.rainSoon ?? true,
-    briefTime: p?.briefTime && HHMM.test(p.briefTime) ? p.briefTime : null,
-    quietStart: p?.quietStart && HHMM.test(p.quietStart) ? p.quietStart : '22:00',
-    quietEnd: p?.quietEnd && HHMM.test(p.quietEnd) ? p.quietEnd : '06:00',
+    alertMin: ALERT_MINS.includes(p?.alertMin as AlertMin) ? (p!.alertMin as AlertMin) : d.alertMin,
+    rainSoon: typeof p?.rainSoon === 'boolean' ? p.rainSoon : d.rainSoon,
+    briefTime: p?.briefTime === null ? null : hhmm(p?.briefTime) ? p.briefTime : d.briefTime,
+    quietStart: hhmm(p?.quietStart) ? p.quietStart : d.quietStart,
+    quietEnd: hhmm(p?.quietEnd) ? p.quietEnd : d.quietEnd,
   };
 }
 
@@ -113,6 +117,7 @@ export async function saveLocations(subId: number, locations: (SavedLocation & {
   })();
 }
 
+/** Writes every column, so the schema DEFAULTs in lib/db.ts never decide a pref (cleanPrefs and config do). */
 export function savePrefs(subId: number, p: PushPrefs) {
   fwDb().prepare(`
     INSERT INTO sub_prefs (sub_id, alert_min, rain_soon, brief_time, quiet_start, quiet_end)

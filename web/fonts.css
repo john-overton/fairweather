@@ -1,0 +1,27 @@
+/* Self-hosted fonts from Fontsource, latin subset only (the package CSS entry points bundle every subset).
+   Big Shoulders ships the opsz axis in its "opsz" files (wght 100-900 + opsz 10-72), which .disp's font-variation-settings uses. */
+@font-face {
+  font-family: 'Big Shoulders Variable'; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(../node_modules/@fontsource-variable/big-shoulders/files/big-shoulders-latin-opsz-normal.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Public Sans Variable'; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(../node_modules/@fontsource-variable/public-sans/files/public-sans-latin-wght-normal.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono'; font-style: normal; font-display: swap; font-weight: 400;
+  src: url(../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono'; font-style: normal; font-display: swap; font-weight: 500;
+  src: url(../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2) format('woff2');
+}
+
+/* .fw appends the fallback stacks (--f-display etc. in globals.css) */
+:root {
+  --fw-font-display: 'Big Shoulders Variable';
+  --fw-font-body: 'Public Sans Variable';
+  --fw-font-mono: 'IBM Plex Mono';
+}

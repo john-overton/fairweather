@@ -49,7 +49,7 @@ export async function radarManifest(): Promise<RadarManifest> {
 /*  Tile cache: IEM tiles stored on disk, served immutable             */
 /* ------------------------------------------------------------------ */
 
-const TILE_DIR = process.env.FAIRWEATHER_TILE_DIR || path.join(/* turbopackIgnore: true */ process.cwd(), 'data', 'tiles');
+const TILE_DIR = process.env.FAIRWEATHER_TILE_DIR || path.join(process.cwd(), 'data', 'tiles');
 const IEM_HOSTS = ['mesonet1', 'mesonet2', 'mesonet3'];
 const OBS_KEEP_MS = 25 * 60 * MIN;
 const OBS_RE = /^ridge::USCOMP-N0Q-(\d{12})$/;

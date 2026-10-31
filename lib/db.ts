@@ -73,6 +73,12 @@ export function fwDb(): Database.Database {
   return db;
 }
 
+/** Checkpoints the WAL and closes the handle (shutdown, and the end of a CLI job run). */
+export function closeDb() {
+  db?.close();
+  db = null;
+}
+
 export interface SubRow {
   id: number;
   endpoint: string;

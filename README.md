@@ -33,42 +33,46 @@ or radar.
 
 ## Run locally
 
-Needs Node 20 to 25 (`.node-version` says 24; better-sqlite3 has no Node 26 build yet).
+Needs Node 22.12 to 25 (`.node-version` says 24; better-sqlite3 has no Node 26 build yet).
 
 ```sh
 npm install
 cp env.sample .env.local     # add a Mapbox public token for the Radar page
-npm run dev                  # http://localhost:3100/fairweather
+npm run dev                  # http://localhost:3100/fairweather (Vite, with the API server on :3101)
+npm run job:dev rain         # run one scheduled job by hand: alerts | rain | radar | cleanup
 npm run typecheck
 npm run contrast             # WCAG contrast check for all 22 palettes
 ```
 
 Everything works without a Mapbox token except the Radar map. Push notifications need VAPID keys
-(`npx web-push generate-vapid-keys`); see `env.sample`.
+(`npx web-push generate-vapid-keys`); see `env.sample`, which also lists the job schedules and the
+defaults for new visitors and subscribers.
 
 ## Deploy
 
-Fairweather runs as a Node service behind nginx at the `/fairweather` path, with a crontab for alerts,
-rain-soon notifications, and the radar cache. See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+Fairweather runs as one Node service behind nginx at the `/fairweather` path; it serves the app and the
+API and runs the alert, rain-soon, radar, and cleanup jobs itself. See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
 ## Layout
 
 ```
-app/
-  layout.tsx, page.tsx      root layout (fonts, PWA metadata, theme bootstrap), single page
+web/                        the app (Vite + React)
+  index.html, main.tsx      PWA metadata, theme bootstrap, fonts, entry
   components/               FairweatherApp shell + Now, Hourly, TenDay, Radar pages, sheets, icons
-  lib/                      client: storage wrapper, themes, formatting, push client, basePath
-  api/                      forecast, alerts, geocode, radar/manifest, radar/tile, push/*, cron/[job]
+  lib/                      client: storage wrapper, themes, formatting, push client, base path
+server/                     Hono server: API routes, static files from dist/web, job scheduler,
+                            job.ts (run one job by hand)
 lib/                        server: NWS/Open-Meteo fetchers, forecast merge, radar manifest and tile
-                            cache, MRMS precip type, SQLite, web push, cron jobs; themes.json; types
+                            cache, MRMS precip type, SQLite, web push, jobs, config (env settings);
+                            themes.json; types
 lib/workers/                mrms-decode.mjs: MRMS GRIB2 decoding off the main thread
 public/                     sw.js (offline + push), manifest.webmanifest, icons/
-scripts/                    cron.sh (crontab entry point), contrast.mjs
+scripts/                    dev.mjs, build-server.mjs, contrast.mjs
 deploy/                     systemd unit and nginx location block
 ```
 
-Everything is served under `basePath: '/fairweather'` (`next.config.ts`). `fetch()` calls go through
-`app/lib/base.ts` because Next does not prefix those.
+Everything is served under `/fairweather` (`base` in `vite.config.ts`). `fetch()` calls go through
+`web/lib/base.ts`.
 
 ## Data
 
@@ -87,7 +91,7 @@ Everything is served under `basePath: '/fairweather'` (`next.config.ts`). `fetch
 Server responses are cached in memory (forecast 10 min, points 24 h, alerts 2 min).
 
 Radar tiles go through `/fairweather/api/radar/tile/...`, which stores each tile on disk (`data/tiles`,
-or `FAIRWEATHER_TILE_DIR`; production uses `/var/cache/fairweather/tiles`) and serves it as immutable. The `radar` cron job pre-fetches the default 2 h loop and the first 6 h of
+or `FAIRWEATHER_TILE_DIR`; production uses `/var/cache/fairweather/tiles`) and serves it as immutable. The `radar` job pre-fetches the default 2 h loop and the first 6 h of
 forecast around Kansas City and subscribers' saved places, and prunes frames older than 25 h and all
 but the newest two HRRR runs. The Radar page adds frames to the map a few at a time, Now first.
 
@@ -95,8 +99,8 @@ but the newest two HRRR runs. The Radar page adds frames to the map a few at a t
 
 Standard Web Push via `web-push` with VAPID keys from `.env.local`. The browser's subscription is its
 identity and its `auth` secret is the credential for prefs, unsubscribe, and test sends.
-`scripts/cron.sh` calls `POST /fairweather/api/cron/{job}` with `FAIRWEATHER_CRON_SECRET`; nginx
-blocks that path from outside.
+The server runs the jobs on a schedule (croner; `FAIRWEATHER_SCHEDULE_*` in `.env.local`, defaults
+below), skipping a run while the previous one is still going. `npm run job <name>` runs one by hand.
 
 - **alerts** (every 2 min): new NWS alerts for any saved location's forecast or county zone, at or above
   the user's threshold. The deliveries table dedupes, so a replay never sends twice. Quiet hours hold
@@ -110,7 +114,7 @@ blocks that path from outside.
 
 ## Design notes and limitations
 
-- Built for one small server: Next.js API routes, SQLite, and a crontab, with no separate radar
+- Built for one small server: a Hono API, a static Vite build, SQLite, and in-process jobs, with no separate radar
   pipeline. Reflectivity comes from IEM tiles; observed precip type is decoded from MRMS GRIB2 on
   demand.
 - No Composite or 1-hr rain radar layers (IEM's MRMS 1-hr tiles paint no-data areas opaque gray).
