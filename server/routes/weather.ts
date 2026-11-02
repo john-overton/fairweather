@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 
 import { config } from '@/lib/config';
-import { toWxAlert, buildForecast } from '@/lib/forecast';
+import { toWxAlert, toWxAlerts, buildForecast } from '@/lib/forecast';
 import { jsonError, parseLatLon } from '@/lib/http';
 import { HttpError, cached, nwsAlert, nwsAlertsPoint } from '@/lib/sources';
 import type { ClientConfig } from '@/lib/types';
@@ -27,7 +27,7 @@ weather.get('/alerts', async (c) => {
   const ll = parseLatLon(new URL(c.req.url));
   if (!ll) return jsonError(400, LATLON_HELP);
   try {
-    const alerts = (await nwsAlertsPoint(ll.lat, ll.lon)).map(toWxAlert).filter((a) => a.messageType !== 'Cancel');
+    const alerts = toWxAlerts(await nwsAlertsPoint(ll.lat, ll.lon));
     return Response.json({ alerts }, { headers: { 'Cache-Control': 'private, max-age=120' } });
   } catch {
     return jsonError(502, "Couldn't reach NWS alerts. Trying again in 2 minutes.");

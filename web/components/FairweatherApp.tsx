@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ForecastResponse, SavedLocation } from '@/lib/types';
+import type { ForecastResponse, SavedLocation, WxAlert } from '@/lib/types';
 
 import { BASE, api } from '../lib/base';
 import { cachedConfig, fetchConfig, FALLBACK_LOC } from '../lib/config';
@@ -9,7 +9,7 @@ import { type PushState, loadPushState, pushOnLoad, syncPush } from '../lib/push
 import { store, migrateStore } from '../lib/store';
 import { THEMES, type Mode, applyTheme } from '../lib/theme';
 import HourlyPage from './HourlyPage';
-import { ChevronDown, MoonIcon, PaletteIcon, SunIcon, TAB_ICONS } from './Icons';
+import { ChevronDown, MoonIcon, PaletteIcon, SunIcon, TAB_ICONS, WarnIcon } from './Icons';
 import NowPage from './NowPage';
 import { AboutSheet, LocationSheet, NotificationsSheet, ThemeSheet, newLocId } from './Sheets';
 import TenDayPage from './TenDayPage';
@@ -26,6 +26,7 @@ const PAGES: { id: PageId; label: string }[] = [
 ];
 const CONFIG_WAIT_MS = 1500;
 const REFRESH_MS = 10 * 60_000;
+const ALERTS_REFRESH_MS = 5 * 60_000;
 const STALE_MS = 30 * 60_000;
 
 interface Cached { data: ForecastResponse; fetchedAt: number }
@@ -56,6 +57,7 @@ export default function FairweatherApp() {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [push, setPush] = useState<PushState>({ on: false, prefs: loadPushState().prefs });
   const [forecasts, setForecasts] = useState<Record<string, Cached>>({});
+  const [alertsByLoc, setAlertsByLoc] = useState<Record<string, WxAlert[]>>({});
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
@@ -176,6 +178,36 @@ export default function FairweatherApp() {
     };
   }, [loc, load]);
 
+  /* ---- Alerts at every saved place, not just the one on screen ---- */
+  useEffect(() => {
+    if (!ready) return;
+    let last = 0;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < ALERTS_REFRESH_MS) return;
+      last = Date.now();
+      for (const l of locations) {
+        fetch(api(`alerts?lat=${l.lat.toFixed(2)}&lon=${l.lon.toFixed(2)}`))
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => { if (j?.alerts) setAlertsByLoc((a) => ({ ...a, [fcKey(l)]: j.alerts })); })
+          .catch(() => { /* keep the last known alerts; retried on the next refresh */ });
+      }
+    };
+    const net = () => { last = 0; refresh(); };
+    refresh();
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('online', net);
+    const t = setInterval(refresh, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('online', net);
+      clearInterval(t);
+    };
+  }, [ready, locations]);
+
+  // Until the first check lands (or when offline), fall back on the alerts in each saved forecast
+  const locAlerts = locations.map((l) => (alertsByLoc[fcKey(l)] ?? forecasts[fcKey(l)]?.data.alerts ?? [])
+    .filter((a) => !(Date.parse(a.ends ?? a.expires ?? '') < now)));
+
   /* ---- Persist locations; keep the server's push copy in sync ---- */
   const firstLocSave = useRef(true);
   useEffect(() => {
@@ -231,7 +263,10 @@ export default function FairweatherApp() {
       <div className="fw">
         <header className="top">
           <button className="loc-btn" aria-haspopup="dialog" onClick={() => setSheet('locations')}>
-            <span className="loc-name disp"><span>{loc.name}</span><ChevronDown /></span>
+            <span className="loc-name disp">
+              <span>{loc.name}</span><ChevronDown />
+              {locAlerts.some((a) => a.length) && <span className="loc-flag" role="img" aria-label="Alert at a saved location"><WarnIcon size={18} /></span>}
+            </span>
             <span className="loc-sub">{sub}</span>
           </button>
           <span className="spacer" />
@@ -299,7 +334,7 @@ export default function FairweatherApp() {
 
       {sheet === 'locations' && (
         <LocationSheet
-          locations={locations} locIdx={locIdx} pushOn={push.on}
+          locations={locations} locIdx={locIdx} alerts={locAlerts} pushOn={push.on}
           onSelect={(i) => { setLocIdx(i); setSheet(null); }}
           onAdd={addLocation} onRemove={removeLocation} onClose={() => setSheet(null)}
           onOpenNotifications={() => setSheet('notifications')} onOpenAbout={() => setSheet('about')}

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { AlertMin, PushPrefs, SavedLocation } from '@/lib/types';
+import type { AlertMin, PushPrefs, SavedLocation, WxAlert } from '@/lib/types';
 
 import { api } from '../lib/base';
 import {
   type PushState, type PushSupport, disablePush, enablePush, pushSupport, savePushState, sendTestPush, syncPush,
 } from '../lib/push';
 import { THEMES, type Mode, effectiveMode } from '../lib/theme';
-import { BellIcon, ChevronRight, CloseIcon, InfoIcon, PinIcon } from './Icons';
+import { BellIcon, ChevronRight, CloseIcon, InfoIcon, PinIcon, WarnIcon } from './Icons';
 
 /* ------------------------------------------------------------------ */
 /*  Sheet shell: bottom sheet on phones, centered dialog on desktop    */
@@ -56,6 +56,8 @@ export const newLocId = () => Math.random().toString(36).slice(2, 10);
 interface LocationSheetProps {
   locations: SavedLocation[];
   locIdx: number;
+  /** Active alerts for each location, most serious first */
+  alerts: WxAlert[][];
   onSelect: (i: number) => void;
   onAdd: (l: Omit<SavedLocation, 'id'>) => void;
   onRemove: (i: number) => void;
@@ -130,6 +132,12 @@ export function LocationSheet(p: LocationSheetProps) {
             <button className="pick" onClick={() => p.onSelect(i)}>
               <b>{l.name}</b>
               <span>{l.lat.toFixed(4)}, {l.lon.toFixed(4)}{p.pushOn && i === 0 ? ' · primary' : ''}</span>
+              {p.alerts[i]?.length > 0 && (
+                <span className="loc-alert">
+                  <WarnIcon size={14} />
+                  <em>{p.alerts[i][0].event}{p.alerts[i].length > 1 ? ` +${p.alerts[i].length - 1} more` : ''}</em>
+                </span>
+              )}
             </button>
             {p.locations.length > 1 && (
               <button className="rm" aria-label={`Remove ${l.name}`} onClick={() => p.onRemove(i)}><CloseIcon /></button>

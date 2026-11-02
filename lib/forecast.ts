@@ -67,6 +67,16 @@ export function toWxAlert(p: NwsAlertProps): WxAlert {
   };
 }
 
+const LEVEL_ORDER: AlertLevel[] = ['warning', 'watch', 'advisory', 'statement'];
+
+/** In-effect alerts for a place, most serious first */
+export function toWxAlerts(props: NwsAlertProps[]): WxAlert[] {
+  return props
+    .map(toWxAlert)
+    .filter((a) => a.messageType !== 'Cancel')
+    .sort((a, b) => LEVEL_ORDER.indexOf(a.level) - LEVEL_ORDER.indexOf(b.level));
+}
+
 function fmtHour(ms: number, tz: string): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric' }).format(ms);
 }
@@ -470,10 +480,7 @@ export async function buildForecast(lat: number, lon: number): Promise<ForecastR
   now.high = d0?.day?.temp ?? (hourly.length ? Math.max(...hourly.slice(0, 18).map((h) => h.temp)) : null);
   now.low = d0?.night?.temp ?? (hourly.length ? Math.min(...hourly.map((h) => h.temp)) : null);
 
-  const alerts = (valOf(alR) ?? [])
-    .map(toWxAlert)
-    .filter((a) => a.messageType !== 'Cancel')
-    .sort((a, b) => ['warning', 'watch', 'advisory', 'statement'].indexOf(a.level) - ['warning', 'watch', 'advisory', 'statement'].indexOf(b.level));
+  const alerts = toWxAlerts(valOf(alR) ?? []);
 
   return {
     now,

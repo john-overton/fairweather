@@ -48,6 +48,7 @@ body {
 .loc-name { font-size: 24px; line-height: 1; letter-spacing: .01em; display: flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 100%; }
 .loc-name > span { overflow: hidden; text-overflow: ellipsis; }
 .loc-name svg { flex: none; }
+.loc-flag { flex: none; display: flex; color: var(--fw-warn); }
 .loc-sub { font-size: 12px; color: var(--fw-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .fw .top .spacer { flex: 1; }
 .chip { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; border: 1px solid var(--fw-line); color: var(--fw-muted); padding: 3px 7px; border-radius: 999px; white-space: nowrap; }
@@ -436,6 +437,8 @@ body {
 }
 .scrim { position: fixed; inset: 0; background: rgba(5, 10, 15, .45); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
 .sheet { background: var(--fw-surface); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 18px max(18px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px)); max-height: 88%; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; overscroll-behavior: contain; }
+/* The sheet takes focus when it opens so Tab starts inside it; only its controls show a ring */
+.sheet:focus-visible { outline: none; }
 .sheet > * { flex-shrink: 0; }
 .sheet.wide { max-width: 560px; }
 @media (min-width: 700px) { .scrim { align-items: center; } .sheet { border-radius: 20px; } }
@@ -447,6 +450,9 @@ body {
 .locrow .pick { flex: 1; text-align: left; min-width: 0; padding: 4px 0; }
 .locrow .pick b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .locrow .pick span { font-size: 12px; color: var(--fw-muted); font-family: var(--f-mono); }
+.locrow .pick .loc-alert { display: flex; align-items: center; gap: 5px; width: fit-content; max-width: 100%; margin-top: 4px; padding: 2px 8px; border-radius: 999px; background: var(--fw-warn-bg); border: 1px solid var(--fw-warn-line); color: var(--fw-warn); font-family: inherit; font-weight: 700; }
+.loc-alert svg { flex: none; }
+.loc-alert em { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .locrow .rm { width: 44px; height: 44px; border-radius: 8px; color: var(--fw-muted); flex: none; }
 .menurow { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--fw-line); border-radius: 12px; text-align: left; width: 100%; min-height: 48px; }
 .menurow .grow { flex: 1; }
