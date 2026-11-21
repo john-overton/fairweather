@@ -1,4 +1,4 @@
-# Fairweather
+# <img src="public/icons/icon-192.png" alt="" width="40" height="40" align="center"> Fairweather
 
 Personal, ad-free, no-login weather app. Live at **[openglades.com/fairweather](https://openglades.com/fairweather)**.
 
@@ -31,9 +31,20 @@ or radar.
 - **Installable PWA** that works offline with the last forecast, and **eleven Kansas City color themes**
   in light, dark, or auto.
 
-## Run locally
+## Requirements
 
-Needs Node 22.12 to 25 (`.node-version` says 24; better-sqlite3 has no Node 26 build yet).
+- **Node.js 22.18 to 25** (`.node-version` says 24; better-sqlite3 has no Node 26 build yet).
+- **A free [Mapbox](https://account.mapbox.com/auth/signup/) account** for the Radar map. Create a
+  public access token (`pk.…`) on your Mapbox account page, put it in `VITE_MAPBOX_TOKEN`, and add
+  your site's domain to the token's URL restrictions. The free tier is plenty for personal use.
+  Without a token everything else works, and the Radar page shows a setup note instead of the map.
+- **Optional:** VAPID keys for push notifications (generated locally, no account needed) and a free
+  [EPA AirNow](https://docs.airnowapi.org/) API key for air quality (it falls back to CAMS without one).
+
+Weather data comes from the National Weather Service, Open-Meteo, the Iowa Environmental Mesonet, and
+NOAA on AWS, none of which need an account or key.
+
+## Run locally
 
 ```sh
 npm install
