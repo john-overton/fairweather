@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { AlertMin, PushPrefs, SavedLocation, WxAlert } from '@/lib/types';
+import type { AlertMin, CurrentWx, PushPrefs, SavedLocation, WxAlert } from '@/lib/types';
 
 import { api } from '../lib/base';
+import { fmtTimeTz } from '../lib/format';
 import {
   type PushState, type PushSupport, disablePush, enablePush, pushSupport, savePushState, sendTestPush, syncPush,
 } from '../lib/push';
 import { THEMES, type Mode, effectiveMode } from '../lib/theme';
-import { BellIcon, ChevronRight, CloseIcon, InfoIcon, PinIcon, WarnIcon } from './Icons';
+import { BellIcon, ChevronRight, CloseIcon, InfoIcon, PinIcon, WarnIcon, WxIcon } from './Icons';
 
 /* ------------------------------------------------------------------ */
 /*  Sheet shell: bottom sheet on phones, centered dialog on desktop    */
@@ -58,6 +59,8 @@ interface LocationSheetProps {
   locIdx: number;
   /** Active alerts for each location, most serious first */
   alerts: WxAlert[][];
+  /** Last known conditions at each location, or null until the first fetch */
+  current: (CurrentWx | null)[];
   onSelect: (i: number) => void;
   onAdd: (l: Omit<SavedLocation, 'id'>) => void;
   onRemove: (i: number) => void;
@@ -69,6 +72,7 @@ interface LocationSheetProps {
 
 export function LocationSheet(p: LocationSheetProps) {
   const [q, setQ] = useState('');
+  const [clock, setClock] = useState(() => Date.now());
   const [results, setResults] = useState<{ name: string; lat: number; lon: number }[]>([]);
   const [searchErr, setSearchErr] = useState<string | null>(null);
   const [geoErr, setGeoErr] = useState<string | null>(null);
@@ -92,6 +96,17 @@ export function LocationSheet(p: LocationSheetProps) {
     }, 300);
     return () => { clearTimeout(t); ctl.abort(); };
   }, [q]);
+
+  // Local times in the rows: tick on each minute boundary
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      setClock(Date.now());
+      t = setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50);
+    };
+    t = setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50);
+    return () => clearTimeout(t);
+  }, []);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) { setGeoErr("This browser can't share its location. Search or enter coordinates instead."); return; }
@@ -127,23 +142,35 @@ export function LocationSheet(p: LocationSheetProps) {
   return (
     <Sheet title="Locations" onClose={p.onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {p.locations.map((l, i) => (
-          <div key={l.id} className={`locrow${i === p.locIdx ? ' on' : ''}`}>
-            <button className="pick" onClick={() => p.onSelect(i)}>
-              <b>{l.name}</b>
-              <span>{l.lat.toFixed(4)}, {l.lon.toFixed(4)}{p.pushOn && i === 0 ? ' · primary' : ''}</span>
-              {p.alerts[i]?.length > 0 && (
-                <span className="loc-alert">
-                  <WarnIcon size={14} />
-                  <em>{p.alerts[i][0].event}{p.alerts[i].length > 1 ? ` +${p.alerts[i].length - 1} more` : ''}</em>
+        {p.locations.map((l, i) => {
+          const cur = p.current[i];
+          return (
+            <div key={l.id} className={`locrow${i === p.locIdx ? ' on' : ''}`}>
+              <button className="pick" onClick={() => p.onSelect(i)}>
+                <span className="pick-text">
+                  <b>{l.name}</b>
+                  <span>{cur?.tz ? fmtTimeTz(clock, cur.tz) : '\u00a0'}{p.pushOn && i === 0 ? ' · primary' : ''}</span>
+                  {p.alerts[i]?.length > 0 && (
+                    <span className="loc-alert">
+                      <WarnIcon size={14} />
+                      <em>{p.alerts[i][0].event}{p.alerts[i].length > 1 ? ` +${p.alerts[i].length - 1} more` : ''}</em>
+                    </span>
+                  )}
                 </span>
+                {cur && (
+                  <span className="loc-now" title={cur.condition}>
+                    <WxIcon code={cur.icon} night={!cur.isDay} />
+                    <b className="num">{cur.temp ?? '--'}°</b>
+                    <span className="sr-only">{cur.condition}</span>
+                  </span>
+                )}
+              </button>
+              {p.locations.length > 1 && (
+                <button className="rm" aria-label={`Remove ${l.name}`} onClick={() => p.onRemove(i)}><CloseIcon /></button>
               )}
-            </button>
-            {p.locations.length > 1 && (
-              <button className="rm" aria-label={`Remove ${l.name}`} onClick={() => p.onRemove(i)}><CloseIcon /></button>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
 
       <div className="label">Add a location</div>

@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ForecastResponse, SavedLocation, WxAlert } from '@/lib/types';
+import type { CurrentWx, ForecastResponse, SavedLocation, WxAlert } from '@/lib/types';
 
 import { BASE, api } from '../lib/base';
 import { cachedConfig, fetchConfig, FALLBACK_LOC } from '../lib/config';
@@ -30,6 +30,7 @@ const ALERTS_REFRESH_MS = 5 * 60_000;
 const STALE_MS = 30 * 60_000;
 
 interface Cached { data: ForecastResponse; fetchedAt: number }
+interface CachedCurrent { data: CurrentWx; fetchedAt: number }
 type Sheet = null | 'locations' | 'theme' | 'notifications' | 'about';
 
 const fcKey = (l: SavedLocation) => `${l.lat.toFixed(2)},${l.lon.toFixed(2)}`;
@@ -58,6 +59,7 @@ export default function FairweatherApp() {
   const [push, setPush] = useState<PushState>({ on: false, prefs: loadPushState().prefs });
   const [forecasts, setForecasts] = useState<Record<string, Cached>>({});
   const [alertsByLoc, setAlertsByLoc] = useState<Record<string, WxAlert[]>>({});
+  const [currentByLoc, setCurrentByLoc] = useState<Record<string, CachedCurrent>>({});
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
@@ -87,6 +89,7 @@ export default function FairweatherApp() {
         if (c?.data?.now) cached[fcKey(l)] = c;
       }
       setForecasts(cached);
+      setCurrentByLoc(store.get<Record<string, CachedCurrent>>('wx.current', {}));
       setPush(loadPushState());
       setPage(pageFromHash());
       setOnline(navigator.onLine);
@@ -207,6 +210,36 @@ export default function FairweatherApp() {
   // Until the first check lands (or when offline), fall back on the alerts in each saved forecast
   const locAlerts = locations.map((l) => (alertsByLoc[fcKey(l)] ?? forecasts[fcKey(l)]?.data.alerts ?? [])
     .filter((a) => !(Date.parse(a.ends ?? a.expires ?? '') < now)));
+
+  /* ---- Current conditions at every saved place, for the Locations sheet ---- */
+  // Newest of the small /current reply and the place's full forecast
+  const locNow = locations.map((l): CachedCurrent | null => {
+    const c = currentByLoc[fcKey(l)];
+    const f = forecasts[fcKey(l)];
+    const fc = f && { data: { ...f.data.now, tz: f.data.meta.tz, updated: f.data.meta.updated }, fetchedAt: f.fetchedAt };
+    if (!c || !fc) return c ?? fc ?? null;
+    return Date.parse(c.data.updated) >= Date.parse(fc.data.updated) ? c : fc;
+  });
+  const locNowRef = useRef(locNow);
+  locNowRef.current = locNow;
+  useEffect(() => {
+    if (sheet !== 'locations') return;
+    locations.forEach((l, i) => {
+      const have = locNowRef.current[i];
+      if (have && Date.now() - have.fetchedAt < REFRESH_MS) return;
+      fetch(api(`current?lat=${l.lat.toFixed(2)}&lon=${l.lon.toFixed(2)}`))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: CurrentWx | null) => {
+          if (j?.icon) setCurrentByLoc((c) => ({ ...c, [fcKey(l)]: { data: j, fetchedAt: Date.now() } }));
+        })
+        .catch(() => { /* keep the last known conditions; retried next time the sheet opens */ });
+    });
+  }, [sheet, locations]);
+  useEffect(() => {
+    if (!ready) return;
+    const keep = new Set(locations.map(fcKey));
+    store.set('wx.current', Object.fromEntries(Object.entries(currentByLoc).filter(([k]) => keep.has(k))));
+  }, [ready, currentByLoc, locations]);
 
   /* ---- Persist locations; keep the server's push copy in sync ---- */
   const firstLocSave = useRef(true);
@@ -334,7 +367,7 @@ export default function FairweatherApp() {
 
       {sheet === 'locations' && (
         <LocationSheet
-          locations={locations} locIdx={locIdx} alerts={locAlerts} pushOn={push.on}
+          locations={locations} locIdx={locIdx} alerts={locAlerts} current={locNow.map((c) => c?.data ?? null)} pushOn={push.on}
           onSelect={(i) => { setLocIdx(i); setSheet(null); }}
           onAdd={addLocation} onRemove={removeLocation} onClose={() => setSheet(null)}
           onOpenNotifications={() => setSheet('notifications')} onOpenAbout={() => setSheet('about')}

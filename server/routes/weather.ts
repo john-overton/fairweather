@@ -1,25 +1,41 @@
-/** /api/forecast, /api/alerts, /api/alerts/detail, /api/geocode, /api/config */
+/** /api/forecast, /api/current, /api/alerts, /api/alerts/detail, /api/geocode, /api/config */
 import { Hono } from 'hono';
 
 import { config } from '@/lib/config';
 import { toWxAlert, toWxAlerts, buildForecast } from '@/lib/forecast';
 import { jsonError, parseLatLon } from '@/lib/http';
 import { HttpError, cached, nwsAlert, nwsAlertsPoint } from '@/lib/sources';
-import type { ClientConfig } from '@/lib/types';
+import type { ClientConfig, CurrentWx } from '@/lib/types';
 
 export const weather = new Hono();
 
 const LATLON_HELP = 'Use decimal degrees, like lat=39.0997&lon=-94.5786';
 
+/** One forecast per rounded point, shared by /forecast and /current */
+const forecastFor = (lat: number, lon: number) => cached(`forecast:${lat},${lon}`, 10 * 60_000, () => buildForecast(lat, lon));
+
 weather.get('/forecast', async (c) => {
   const ll = parseLatLon(new URL(c.req.url));
   if (!ll) return jsonError(400, LATLON_HELP);
   try {
-    const data = await cached(`forecast:${ll.lat},${ll.lon}`, 10 * 60_000, () => buildForecast(ll.lat, ll.lon));
+    const data = await forecastFor(ll.lat, ll.lon);
     return Response.json(data, { headers: { 'Cache-Control': 'private, max-age=300' } });
   } catch (e) {
     console.error('[fairweather] forecast failed', e);
     return jsonError(502, `Couldn't load the forecast (${(e as Error).message}). Showing saved data if available.`);
+  }
+});
+
+/** Just the current temperature and condition, for the rows in the Locations sheet */
+weather.get('/current', async (c) => {
+  const ll = parseLatLon(new URL(c.req.url));
+  if (!ll) return jsonError(400, LATLON_HELP);
+  try {
+    const { now, meta } = await forecastFor(ll.lat, ll.lon);
+    const body: CurrentWx = { temp: now.temp, icon: now.icon, isDay: now.isDay, condition: now.condition, tz: meta.tz, updated: meta.updated };
+    return Response.json(body, { headers: { 'Cache-Control': 'private, max-age=300' } });
+  } catch {
+    return jsonError(502, "Couldn't load current conditions.");
   }
 });
 

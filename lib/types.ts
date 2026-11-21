@@ -167,6 +167,18 @@ export interface RadarManifest {
   updated: string;
 }
 
+/** /api/current: the slice of `NowData` shown beside each saved place */
+export interface CurrentWx {
+  temp: number | null;
+  icon: Cond;
+  isDay: boolean;
+  condition: string;
+  /** IANA time zone of the place */
+  tz: string;
+  /** When the forecast it came from was built */
+  updated: string;
+}
+
 export interface SavedLocation {
   id: string;
   name: string;
