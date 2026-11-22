@@ -298,7 +298,7 @@ export default function FairweatherApp() {
           <button className="loc-btn" aria-haspopup="dialog" onClick={() => setSheet('locations')}>
             <span className="loc-name disp">
               <span>{loc.name}</span><ChevronDown />
-              {locAlerts.some((a) => a.length) && <span className="loc-flag" role="img" aria-label="Alert at a saved location"><WarnIcon size={18} /></span>}
+              {locAlerts[locations.indexOf(loc)]?.length > 0 && <span className="loc-flag" role="img" aria-label={`Active alert for ${loc.name}`}><WarnIcon size={18} /></span>}
             </span>
             <span className="loc-sub">{sub}</span>
           </button>
