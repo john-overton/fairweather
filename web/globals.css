@@ -443,6 +443,8 @@ body {
 .sheet > * { flex-shrink: 0; }
 .sheet.wide { max-width: 560px; }
 @media (min-width: 700px) { .scrim { align-items: center; } .sheet { border-radius: 20px; } }
+/* Phones: a sheet may grow to the whole screen, stopping just under the status bar */
+@media (max-width: 699px) { .sheet { max-height: calc(100% - env(safe-area-inset-top, 0px) - 8px); } }
 .sheet h2 { font-size: 26px; margin: 0; line-height: 1; flex: 1; }
 .sheet h3 { font-size: 15px; font-weight: 700; margin: 0; }
 .sheet-head { display: flex; align-items: center; gap: 8px; }
