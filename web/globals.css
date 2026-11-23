@@ -17,6 +17,10 @@ html, body { height: 100%; }
 #root { display: contents; } /* Vite mount node; keeps .fw a direct layout child of body, as under Next */
 /* The colour iOS samples for the status bar is the root canvas, so paint it on html itself, not only via body. */
 html { background: var(--fw-bg); }
+/* Installed app on iOS 26+ draws a blur ("scroll edge effect") over the top ~40pt of the page, smearing the header.
+   WebKit skips it when it finds an opaque fixed element at the very top edge to take a colour from, so this strip
+   sits there, in the header's own top padding. It must stay hit-testable (no pointer-events: none) to be found. */
+.fw-edge { position: fixed; top: 0; left: 0; right: 0; height: calc(env(safe-area-inset-top, 0px) + 10px); background: var(--fw-bg); }
 body {
   margin: 0; background: var(--fw-bg); color: var(--fw-ink);
   overflow: hidden; overscroll-behavior: none; touch-action: manipulation;
