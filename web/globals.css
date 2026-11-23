@@ -62,7 +62,7 @@ body {
 .page[hidden] { display: none !important; }
 
 /* Tabs */
-.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; border-top: 1px solid var(--fw-line); padding-block: 6px max(4px, env(safe-area-inset-bottom, 0px)); max-width: 560px; width: 100%; margin: 0 auto; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; border-top: 1px solid var(--fw-line); padding-block: 6px max(4px, env(safe-area-inset-bottom, 0px) - 20px); /* the full inset leaves a tall empty band; labels only need to clear the home indicator */ max-width: 560px; width: 100%; margin: 0 auto; }
 .tab { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; border-radius: 12px; color: var(--fw-muted); font-size: 11.5px; font-weight: 600; letter-spacing: .02em; min-height: 44px; }
 .tab svg { width: 24px; height: 24px; }
 .tab[aria-current="page"] { color: var(--fw-accent); }
