@@ -16,8 +16,11 @@
 html, body { height: 100%; }
 #root { display: contents; } /* Vite mount node; keeps .fw a direct layout child of body, as under Next */
 /* Installed app on iOS 26 blurs and dims content under the status bar ("scroll edge effect"), smearing the
-   location title upward. Leave a strip of plain background so the blur has nothing to pick up. */
-@media (display-mode: standalone) { :root { --fw-top-gap: 22px; } }
+   location title upward. Leave a strip of plain background so the blur has nothing to pick up.
+   iOS only (-webkit-touch-callout exists nowhere else): an installed desktop app has no status bar to clear. */
+@media (display-mode: standalone) { @supports (-webkit-touch-callout: none) { :root { --fw-top-gap: 22px; } } }
+/* The colour iOS samples for the status bar is the root canvas, so paint it on html itself, not only via body. */
+html { background: var(--fw-bg); }
 body {
   margin: 0; background: var(--fw-bg); color: var(--fw-ink);
   overflow: hidden; overscroll-behavior: none; touch-action: manipulation;
@@ -27,6 +30,7 @@ body {
   --f-display: var(--fw-font-display), "Big Shoulders", "Arial Narrow", sans-serif;
   --f-body: var(--fw-font-body), "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: var(--fw-font-mono), "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  box-sizing: border-box; /* top padding must come out of the height, or the tab bar is pushed off the bottom */
   height: 100%; max-width: 1280px; margin: 0 auto; display: grid; grid-template-rows: auto 1fr auto;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-top: calc(env(safe-area-inset-top, 0px) + var(--fw-top-gap, 0px));
