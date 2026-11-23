@@ -52,4 +52,8 @@ export function applyTheme(themeId: string, mode: Mode) {
   root.style.setProperty('--fw-glass', `${p.surface}e6`);
   root.style.colorScheme = m;
   document.querySelectorAll('meta[name="theme-color"]').forEach((el) => el.setAttribute('content', p.bg));
+  // iOS colours the status bar from the fixed .fw-edge strip but keeps the colour it sampled first.
+  // Putting a fresh copy of the strip in the page makes it sample again, so the bar follows the theme.
+  const edge = document.querySelector('.fw-edge');
+  if (edge) edge.replaceWith(edge.cloneNode(false));
 }
