@@ -9,7 +9,7 @@ import { type PushState, loadPushState, pushOnLoad, syncPush } from '../lib/push
 import { store, migrateStore } from '../lib/store';
 import { THEMES, type Mode, applyTheme } from '../lib/theme';
 import HourlyPage from './HourlyPage';
-import { ChevronDown, MoonIcon, PaletteIcon, SunIcon, TAB_ICONS, WarnIcon } from './Icons';
+import { AutoIcon, ChevronDown, MoonIcon, PaletteIcon, SunIcon, TAB_ICONS, WarnIcon } from './Icons';
 import NowPage from './NowPage';
 import { AboutSheet, LocationSheet, NotificationsSheet, ThemeSheet, newLocId } from './Sheets';
 import TenDayPage from './TenDayPage';
@@ -28,6 +28,8 @@ const CONFIG_WAIT_MS = 1500;
 const REFRESH_MS = 10 * 60_000;
 const ALERTS_REFRESH_MS = 5 * 60_000;
 const STALE_MS = 30 * 60_000;
+const NEXT_MODE: Record<Mode, Mode> = { system: 'light', light: 'dark', dark: 'system' };
+const MODE_LABEL: Record<Mode, string> = { system: 'auto', light: 'light', dark: 'dark' };
 
 interface Cached { data: ForecastResponse; fetchedAt: number }
 interface CachedCurrent { data: CurrentWx; fetchedAt: number }
@@ -305,12 +307,13 @@ export default function FairweatherApp() {
           <span className="spacer" />
           {!online && <span className="chip warn hide-sm">Offline</span>}
           {loading && !data && <span className="chip hide-sm">Loading</span>}
-          <button className="icon-btn" aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={() => {
-            const m: Mode = dark ? 'light' : 'dark';
+          {/* Shows the current setting; a tap moves to the next: auto, light, dark */}
+          <button className="icon-btn" aria-label={`Appearance: ${MODE_LABEL[mode]}. Switch to ${MODE_LABEL[NEXT_MODE[mode]]}`} onClick={() => {
+            const m = NEXT_MODE[mode];
             setMode(m);
             store.set('wx.mode', m);
           }}>
-            {dark ? <SunIcon /> : <MoonIcon />}
+            {mode === 'system' ? <AutoIcon /> : mode === 'dark' ? <MoonIcon /> : <SunIcon />}
           </button>
           <button className="icon-btn" aria-label="Color themes" aria-haspopup="dialog" onClick={() => setSheet('theme')}><PaletteIcon /></button>
         </header>

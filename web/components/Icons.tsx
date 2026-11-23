@@ -82,6 +82,10 @@ export const SunIcon = ({ size = 20 }: IconProps) => (
 export const MoonIcon = ({ size = 20 }: IconProps) => (
   <svg {...base(size)} strokeWidth={1.8}><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /></svg>
 );
+/** "A" in a circle: follow the device's light/dark setting */
+export const AutoIcon = ({ size = 20 }: IconProps) => (
+  <svg {...base(size)} strokeWidth={1.8}><circle cx="12" cy="12" r="9" /><path d="M8.6 16l3.4-8.5 3.4 8.5M9.9 13h4.2" /></svg>
+);
 export const PaletteIcon = ({ size = 20 }: IconProps) => (
   <svg {...base(size)} strokeWidth={1.8}>
     <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z" />
